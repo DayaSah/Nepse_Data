@@ -1,0 +1,147 @@
+{
+  "top_buy": [
+    {
+      "stock_symbol": "NIBLGF",
+      "total_quantity": 203200.0,
+      "total_amount": 1894590.0,
+      "average_price": 9.32,
+      "txn_percentage": 0.28
+    },
+    {
+      "stock_symbol": "SHEL",
+      "total_quantity": 127526.0,
+      "total_amount": 40959984.0,
+      "average_price": 321.19,
+      "txn_percentage": 6.13
+    },
+    {
+      "stock_symbol": "RIDI",
+      "total_quantity": 82524.0,
+      "total_amount": 27033530.0,
+      "average_price": 327.58,
+      "txn_percentage": 4.05
+    },
+    {
+      "stock_symbol": "SSHL",
+      "total_quantity": 80510.0,
+      "total_amount": 15620522.0,
+      "average_price": 194.02,
+      "txn_percentage": 2.34
+    },
+    {
+      "stock_symbol": "SFEF",
+      "total_quantity": 78608.0,
+      "total_amount": 757588.0,
+      "average_price": 9.64,
+      "txn_percentage": 0.11
+    },
+    {
+      "stock_symbol": "NHPC",
+      "total_quantity": 66620.0,
+      "total_amount": 15577390.0,
+      "average_price": 233.82,
+      "txn_percentage": 2.33
+    },
+    {
+      "stock_symbol": "AKPL",
+      "total_quantity": 63082.0,
+      "total_amount": 17145752.0,
+      "average_price": 271.8,
+      "txn_percentage": 2.57
+    },
+    {
+      "stock_symbol": "H8020",
+      "total_quantity": 60000.0,
+      "total_amount": 700000.0,
+      "average_price": 11.67,
+      "txn_percentage": 0.1
+    },
+    {
+      "stock_symbol": "NSIF2",
+      "total_quantity": 59900.0,
+      "total_amount": 639378.0,
+      "average_price": 10.67,
+      "txn_percentage": 0.1
+    },
+    {
+      "stock_symbol": "PHCL",
+      "total_quantity": 56618.0,
+      "total_amount": 17620686.0,
+      "average_price": 311.22,
+      "txn_percentage": 2.64
+    }
+  ],
+  "top_sell": [
+    {
+      "stock_symbol": "SHEL",
+      "total_quantity": 161898.0,
+      "total_amount": 51101818.0,
+      "average_price": 315.64,
+      "txn_percentage": 7.21
+    },
+    {
+      "stock_symbol": "NHPC",
+      "total_quantity": 138548.0,
+      "total_amount": 32077550.0,
+      "average_price": 231.53,
+      "txn_percentage": 4.52
+    },
+    {
+      "stock_symbol": "NIBLGF",
+      "total_quantity": 129400.0,
+      "total_amount": 1100296.0,
+      "average_price": 8.5,
+      "txn_percentage": 0.16
+    },
+    {
+      "stock_symbol": "SFEF",
+      "total_quantity": 94608.0,
+      "total_amount": 914418.0,
+      "average_price": 9.67,
+      "txn_percentage": 0.13
+    },
+    {
+      "stock_symbol": "RIDI",
+      "total_quantity": 83658.0,
+      "total_amount": 27153216.0,
+      "average_price": 324.57,
+      "txn_percentage": 3.83
+    },
+    {
+      "stock_symbol": "NIBSF2",
+      "total_quantity": 74400.0,
+      "total_amount": 627600.0,
+      "average_price": 8.44,
+      "txn_percentage": 0.09
+    },
+    {
+      "stock_symbol": "HURJA",
+      "total_quantity": 72134.0,
+      "total_amount": 20236752.0,
+      "average_price": 280.54,
+      "txn_percentage": 2.85
+    },
+    {
+      "stock_symbol": "SIGS3",
+      "total_quantity": 63800.0,
+      "total_amount": 652238.0,
+      "average_price": 10.22,
+      "txn_percentage": 0.09
+    },
+    {
+      "stock_symbol": "NGPL",
+      "total_quantity": 54524.0,
+      "total_amount": 23386966.0,
+      "average_price": 428.93,
+      "txn_percentage": 3.3
+    },
+    {
+      "stock_symbol": "MFIL",
+      "total_quantity": 49638.0,
+      "total_amount": 38665296.0,
+      "average_price": 778.95,
+      "txn_percentage": 5.45
+    }
+  ],
+  "latest_date": "2026-02-17"
+}
