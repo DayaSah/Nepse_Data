@@ -1,94 +1,105 @@
+import streamlit as st
 import requests
 import json
 import time
-import pandas as pd
 from github import Github
-from io import StringIO
+from datetime import datetime
 
-# --- CONFIGURATION ---
-GITHUB_TOKEN = "your_github_token_here"
-REPO_NAME = "your_username/your_repo_name"
+# --- CONFIGURATION & TARGETS ---
 STOCKS = ["NHPC", "SGHC", "ULHC", "KKHC", "AKJCL", "RIDI", "SHPC"]
 BROKERS = ["58", "41", "48", "52", "55"]
 
-# EXTRACTED HEADERS FROM API.TXT
-# Note: You MUST update these tokens regularly or the requests will fail.
-NEPSE_ALPHA_HEADERS = {
+# Headers from Secrets
+NA_HEADERS = {
     "accept": "application/json, text/plain, */*",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
-    "cookie": "_ga=GA1.1.1825060222.1770908279; cf_clearance=N3y0esBIRHC9BbpH8CkFDarnTUBqevPVXrDy.9YbUE0-1771498720...; nepsealpha_session=eyJpdiI6Ii9BL2daYzFscFVkOVluUmQwNk9NWHc9PSIsInZhbHVlIjoialNlcmZLVzg1QkxYcU5lTjdIZEVqU1hoTDlhY1UxMS9CMFQvMXJsNzRkdVZaRzZ0cENHb3FHcnNLTG1OUWlYcG9jTi9pVzNTR1h0YThXa0NpRzlVTDA3d0phVzBHUWNqV1BuRWVkNGc3eW9FbnRxTWkvTjNJY2VlYXp5SFZzRmciLCJtYWMiOiI0NGIyMWU0ZDc3MmVlOGY5MTNiZmY4NDg4MjY3Mjk4NDNlNjNlMTdjNWJiMzAyYzk2NjIyMzQ3MGIyZWM1MjQyIiwidGFnIjoiIn0%3D", # UPDATE THIS
+    "cookie": st.secrets["nepse_alpha"]["cookie"],
+    "user-agent": st.secrets["nepse_alpha"]["user_agent"],
     "x-requested-with": "XMLHttpRequest"
 }
 
 NAVYA_HEADERS = {
-    "authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzcxNTcxNzI5LCJpYXQiOjE3NzE0ODUzMjksImp0aSI6ImM5ZjI5ZjU2MWQ4NDQ3NmY4MTNmNWIyMzYyNDM5MWRmIiwidXNlcl9pZCI6NDM5MTR9.NhxJliiOtcrcsu5sUd3zNjDI42Tdn6WIsbGC8ATV0Jw", # UPDATE THIS
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+    "authorization": st.secrets["navya"]["auth_bearer"],
+    "cookie": st.secrets["navya"]["cookie"],
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
 }
 
-# --- GITHUB HELPER ---
-def upload_to_github(data, filename):
-    g = Github(GITHUB_TOKEN)
-    repo = g.get_repo(REPO_NAME)
-    content = json.dumps(data, indent=4) if isinstance(data, dict) else data
-    
+# --- GITHUB STORAGE ENGINE ---
+def save_to_github(data, filename):
     try:
-        contents = repo.get_contents(filename)
-        repo.update_file(contents.path, f"Update {filename}", content, contents.sha)
-    except:
-        repo.create_file(filename, f"Initial {filename}", content)
-    print(f"Successfully stored: {filename}")
-
-# --- FETCHERS ---
-
-def fetch_nepse_alpha_data():
-    """Fetches trading history and symbols for target stocks"""
-    fsk = "1771326338011" # Extracted from your file
-    for stock in STOCKS:
-        # 1. Trading History
-        url = f"https://www.nepsealpha.com/trading/1/history?fsk={fsk}&symbol={stock}&resolution=1&frame=1"
-        res = requests.get(url, headers=NEPSE_ALPHA_HEADERS)
-        if res.status_code == 200:
-            upload_to_github(res.json(), f"nepse_alpha/history_{stock}.json")
+        g = Github(st.secrets["github"]["token"])
+        repo = g.get_repo(st.secrets["github"]["repo"])
+        content = json.dumps(data, indent=2)
         
-        # 2. Live Floorsheet Filter (Stock + Broker 58 example)
-        # Note: You can loop through all broker combinations here
-        fs_url = f"https://nepsealpha.com/floorsheet-live-today/filter?fsk={fsk}&stockSymbol={stock}&itemsPerPage=500"
-        fs_res = requests.get(fs_url, headers=NEPSE_ALPHA_HEADERS)
-        if fs_res.status_code == 200:
-            upload_to_github(fs_res.json(), f"nepse_alpha/floorsheet_{stock}.json")
+        try:
+            # Update existing file
+            file = repo.get_contents(filename)
+            repo.update_file(file.path, f"Weekly Update: {datetime.now()}", content, file.sha)
+        except:
+            # Create new file
+            repo.create_file(filename, "Initial Upload", content)
+        return True
+    except Exception as e:
+        st.error(f"GitHub Error for {filename}: {e}")
+        return False
 
-def fetch_navya_data():
-    """Fetches stock-based and broker-based floorsheets from Navya"""
-    # 1. Static/Global Endpoints
-    endpoints = {
-        "highlow": "https://navyaadvisors.com/api_endpoint/stocks/highlow",
-        "market_cap_macro": "https://navyaadvisors.com/api_endpoint/market_cap_valuation/macro",
-        "market_cap_mid": "https://navyaadvisors.com/api_endpoint/market_cap_valuation/mid",
-        "market_cap_small": "https://navyaadvisors.com/api_endpoint/market_cap_valuation/small"
-    }
+# --- API FETCHERS ---
+def run_batch_update():
+    fsk = st.secrets["nepse_alpha"]["fsk"]
+    progress_bar = st.progress(0)
+    status = st.empty()
     
-    for name, url in endpoints.items():
-        res = requests.get(url, headers=NAVYA_HEADERS)
-        if res.status_code == 200:
-            upload_to_github(res.json(), f"navya/{name}.json")
+    # API 1 & 2: Nepse Alpha Symbol & History
+    for i, stock in enumerate(STOCKS):
+        status.text(f"Fetching NepseAlpha: {stock}")
+        # Symbol Details
+        res1 = requests.get(f"https://www.nepsealpha.com/trading/1/symbols?fsk={fsk}&symbol={stock}", headers=NA_HEADERS)
+        if res1.status_code == 200:
+            save_to_github(res1.json(), f"api1/details_{stock}.json")
+            
+        # Price History
+        res2 = requests.get(f"https://www.nepsealpha.com/trading/1/history?fsk={fsk}&symbol={stock}&resolution=1&frame=1", headers=NA_HEADERS)
+        if res2.status_code == 200:
+            save_to_github(res2.json(), f"api2/history_{stock}.json")
+        time.sleep(1) # Safety delay
+    
+    # API 3 & 4: Navya Trading Data & HighLow
+    status.text("Fetching Navya Global Data...")
+    res3 = requests.get("https://navyaadvisors.com/api_endpoint/stocks/highlow", headers=NAVYA_HEADERS)
+    if res3.status_code == 200:
+        save_to_github(res3.json(), "api4/highlow.json")
 
-    # 2. Broker-Based (For the specific TMS list)
+    # API 5: Market Cap (Macro/Mid/Small)
+    for cap in ["macro", "mid", "small"]:
+        res4 = requests.get(f"https://navyaadvisors.com/api_endpoint/market_cap_valuation/{cap}", headers=NAVYA_HEADERS)
+        if res4.status_code == 200:
+            save_to_github(res4.json(), f"api5/market_cap_{cap}.json")
+
+    # API 6: Broker Based Floorsheet (Target Brokers)
     for broker in BROKERS:
-        url = f"https://live.navyaadvisors.com/api/broker-based-floorsheet/{broker}/?period=1d"
-        res = requests.get(url, headers=NAVYA_HEADERS)
-        if res.status_code == 200:
-            upload_to_github(res.json(), f"navya/broker_{broker}_floorsheet.json")
+        status.text(f"Fetching Broker Floorsheet: {broker}")
+        res5 = requests.get(f"https://live.navyaadvisors.com/api/broker-based-floorsheet/{broker}/?period=1w", headers=NAVYA_HEADERS)
+        if res5.status_code == 200:
+            save_to_github(res5.json(), f"api6/broker_{broker}.json")
+        time.sleep(1)
 
-    # 3. Stock-Based
+    # API 7: Stock Based Floorsheet (Target Stocks)
     for stock in STOCKS:
-        url = f"https://live.navyaadvisors.com/api/stock-based-floorsheet/{stock}/?period=1d"
-        res = requests.get(url, headers=NAVYA_HEADERS)
-        if res.status_code == 200:
-            upload_to_github(res.json(), f"navya/stock_{stock}_floorsheet.json")
+        status.text(f"Fetching Stock Floorsheet: {stock}")
+        res6 = requests.get(f"https://live.navyaadvisors.com/api/stock-based-floorsheet/{stock}/?period=1w", headers=NAVYA_HEADERS)
+        if res6.status_code == 200:
+            save_to_github(res6.json(), f"api7/stock_{stock}.json")
 
-# --- EXECUTION ---
-if __name__ == "__main__":
-    print("Starting Fetching Cycle...")
-    fetch_navya_data()
-    fetch_nepse_alpha_data()
-    print("Cycle Complete.")
+    status.success("Weekly Update Complete!")
+    progress_bar.progress(100)
+
+# --- STREAMLIT UI ---
+st.title("NEPSE Manipulation - Weekly Data Fetcher")
+st.warning("Ensure your Bearer Tokens and Cookies in secrets.toml are fresh before running.")
+
+if st.button("🚀 Run Weekly Batch Update"):
+    with st.spinner("Processing APIs and syncing to GitHub..."):
+        run_batch_update()
+
+st.sidebar.header("Target Assets")
+st.sidebar.write("**Stocks:**", ", ".join(STOCKS))
+st.sidebar.write("**Brokers:**", ", ".join(BROKERS))
