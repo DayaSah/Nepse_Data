@@ -93,20 +93,62 @@ def fetch_nepse_history(symbol, resolution=1, frame=1):
         "Cookie": NEPSE_COOKIE,
         "Accept": "application/json"
     }
+
     r = requests.get(url, headers=headers)
-    return r.json()
+
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}", "text": r.text[:500]}
+
+    if "application/json" not in r.headers.get("Content-Type", ""):
+        return {
+            "error": "Non-JSON response",
+            "content_type": r.headers.get("Content-Type"),
+            "text": r.text[:500]
+        }
+
+    try:
+        return r.json()
+    except Exception as e:
+        return {
+            "error": "JSON decode failed",
+            "exception": str(e),
+            "raw": r.text[:500]
+        }
+
 
 def fetch_floorsheet_live(symbol, buyer="", seller=""):
     url = (
         "https://nepsealpha.com/floorsheet-live-today/filter"
         f"?fsk={NEPSE_FSK}&stockSymbol={symbol}&buyer={buyer}&seller={seller}&itemsPerPage=500"
     )
+
     headers = {
         "User-Agent": NEPSE_UA,
-        "Cookie": NEPSE_COOKIE
+        "Cookie": NEPSE_COOKIE,
+        "Accept": "application/json"
     }
+
     r = requests.get(url, headers=headers)
-    return r.json()
+
+    if r.status_code != 200:
+        return {"error": f"HTTP {r.status_code}", "text": r.text[:500]}
+
+    if "application/json" not in r.headers.get("Content-Type", ""):
+        return {
+            "error": "Non-JSON response",
+            "content_type": r.headers.get("Content-Type"),
+            "text": r.text[:500]
+        }
+
+    try:
+        return r.json()
+    except Exception as e:
+        return {
+            "error": "JSON decode failed",
+            "exception": str(e),
+            "raw": r.text[:500]
+        }
+
 
 # =========================
 # STREAMLIT UI
