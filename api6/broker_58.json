@@ -1,0 +1,147 @@
+{
+  "top_buy": [
+    {
+      "stock_symbol": "AKJCL",
+      "total_quantity": 1700828.0,
+      "total_amount": 644496078.0,
+      "average_price": 378.93,
+      "txn_percentage": 12.25
+    },
+    {
+      "stock_symbol": "RIDI",
+      "total_quantity": 1500704.0,
+      "total_amount": 490557364.0,
+      "average_price": 326.88,
+      "txn_percentage": 9.32
+    },
+    {
+      "stock_symbol": "RHPL",
+      "total_quantity": 612554.0,
+      "total_amount": 186059640.0,
+      "average_price": 303.74,
+      "txn_percentage": 3.54
+    },
+    {
+      "stock_symbol": "NHPC",
+      "total_quantity": 514264.0,
+      "total_amount": 119369260.0,
+      "average_price": 232.12,
+      "txn_percentage": 2.27
+    },
+    {
+      "stock_symbol": "TPC",
+      "total_quantity": 511754.0,
+      "total_amount": 212660910.0,
+      "average_price": 415.55,
+      "txn_percentage": 4.04
+    },
+    {
+      "stock_symbol": "MBJC",
+      "total_quantity": 472888.0,
+      "total_amount": 146378838.0,
+      "average_price": 309.54,
+      "txn_percentage": 2.78
+    },
+    {
+      "stock_symbol": "SHEL",
+      "total_quantity": 447970.0,
+      "total_amount": 142705302.0,
+      "average_price": 318.56,
+      "txn_percentage": 2.71
+    },
+    {
+      "stock_symbol": "NICA",
+      "total_quantity": 436450.0,
+      "total_amount": 142650544.0,
+      "average_price": 326.84,
+      "txn_percentage": 2.71
+    },
+    {
+      "stock_symbol": "LEC",
+      "total_quantity": 247846.0,
+      "total_amount": 57327728.0,
+      "average_price": 231.3,
+      "txn_percentage": 1.09
+    },
+    {
+      "stock_symbol": "PHCL",
+      "total_quantity": 219702.0,
+      "total_amount": 67215988.0,
+      "average_price": 305.94,
+      "txn_percentage": 1.28
+    }
+  ],
+  "top_sell": [
+    {
+      "stock_symbol": "AKJCL",
+      "total_quantity": 1819348.0,
+      "total_amount": 690264878.0,
+      "average_price": 379.4,
+      "txn_percentage": 12.73
+    },
+    {
+      "stock_symbol": "RIDI",
+      "total_quantity": 1621056.0,
+      "total_amount": 533346148.0,
+      "average_price": 329.01,
+      "txn_percentage": 9.84
+    },
+    {
+      "stock_symbol": "NICA",
+      "total_quantity": 476192.0,
+      "total_amount": 155538286.0,
+      "average_price": 326.63,
+      "txn_percentage": 2.87
+    },
+    {
+      "stock_symbol": "SSHL",
+      "total_quantity": 434162.0,
+      "total_amount": 83712610.0,
+      "average_price": 192.81,
+      "txn_percentage": 1.54
+    },
+    {
+      "stock_symbol": "BNHC",
+      "total_quantity": 365656.0,
+      "total_amount": 157364828.0,
+      "average_price": 430.36,
+      "txn_percentage": 2.9
+    },
+    {
+      "stock_symbol": "NGPL",
+      "total_quantity": 350376.0,
+      "total_amount": 150478080.0,
+      "average_price": 429.48,
+      "txn_percentage": 2.78
+    },
+    {
+      "stock_symbol": "KKHC",
+      "total_quantity": 348220.0,
+      "total_amount": 100570870.0,
+      "average_price": 288.81,
+      "txn_percentage": 1.85
+    },
+    {
+      "stock_symbol": "RHPL",
+      "total_quantity": 322860.0,
+      "total_amount": 99475898.0,
+      "average_price": 308.11,
+      "txn_percentage": 1.83
+    },
+    {
+      "stock_symbol": "AHPC",
+      "total_quantity": 274778.0,
+      "total_amount": 80156070.0,
+      "average_price": 291.71,
+      "txn_percentage": 1.48
+    },
+    {
+      "stock_symbol": "SHEL",
+      "total_quantity": 240102.0,
+      "total_amount": 76433616.0,
+      "average_price": 318.34,
+      "txn_percentage": 1.41
+    }
+  ],
+  "latest_date": "2026-02-17"
+}
