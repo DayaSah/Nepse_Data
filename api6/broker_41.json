@@ -1,0 +1,147 @@
+{
+  "top_buy": [
+    {
+      "stock_symbol": "NHPC",
+      "total_quantity": 119132.0,
+      "total_amount": 28078270.0,
+      "average_price": 235.69,
+      "txn_percentage": 2.92
+    },
+    {
+      "stock_symbol": "LEC",
+      "total_quantity": 112360.0,
+      "total_amount": 25622808.0,
+      "average_price": 228.04,
+      "txn_percentage": 2.67
+    },
+    {
+      "stock_symbol": "RIDI",
+      "total_quantity": 88474.0,
+      "total_amount": 28867610.0,
+      "average_price": 326.28,
+      "txn_percentage": 3.0
+    },
+    {
+      "stock_symbol": "AHPC",
+      "total_quantity": 77668.0,
+      "total_amount": 22554780.0,
+      "average_price": 290.4,
+      "txn_percentage": 2.35
+    },
+    {
+      "stock_symbol": "SAIL",
+      "total_quantity": 75118.0,
+      "total_amount": 102407224.0,
+      "average_price": 1363.28,
+      "txn_percentage": 10.65
+    },
+    {
+      "stock_symbol": "HURJA",
+      "total_quantity": 71872.0,
+      "total_amount": 20275262.0,
+      "average_price": 282.1,
+      "txn_percentage": 2.11
+    },
+    {
+      "stock_symbol": "SHEL",
+      "total_quantity": 71650.0,
+      "total_amount": 22957148.0,
+      "average_price": 320.41,
+      "txn_percentage": 2.39
+    },
+    {
+      "stock_symbol": "AKPL",
+      "total_quantity": 70494.0,
+      "total_amount": 19409104.0,
+      "average_price": 275.33,
+      "txn_percentage": 2.02
+    },
+    {
+      "stock_symbol": "NGPL",
+      "total_quantity": 63040.0,
+      "total_amount": 27479176.0,
+      "average_price": 435.9,
+      "txn_percentage": 2.86
+    },
+    {
+      "stock_symbol": "PHCL",
+      "total_quantity": 51960.0,
+      "total_amount": 16137168.0,
+      "average_price": 310.57,
+      "txn_percentage": 1.68
+    }
+  ],
+  "top_sell": [
+    {
+      "stock_symbol": "RIDI",
+      "total_quantity": 281780.0,
+      "total_amount": 92184352.0,
+      "average_price": 327.15,
+      "txn_percentage": 8.59
+    },
+    {
+      "stock_symbol": "AKJCL",
+      "total_quantity": 127496.0,
+      "total_amount": 48145084.0,
+      "average_price": 377.62,
+      "txn_percentage": 4.49
+    },
+    {
+      "stock_symbol": "AKPL",
+      "total_quantity": 110886.0,
+      "total_amount": 30325278.0,
+      "average_price": 273.48,
+      "txn_percentage": 2.83
+    },
+    {
+      "stock_symbol": "SHEL",
+      "total_quantity": 100732.0,
+      "total_amount": 31753102.0,
+      "average_price": 315.22,
+      "txn_percentage": 2.96
+    },
+    {
+      "stock_symbol": "NGPL",
+      "total_quantity": 88168.0,
+      "total_amount": 37813648.0,
+      "average_price": 428.88,
+      "txn_percentage": 3.52
+    },
+    {
+      "stock_symbol": "HURJA",
+      "total_quantity": 71260.0,
+      "total_amount": 19726308.0,
+      "average_price": 276.82,
+      "txn_percentage": 1.84
+    },
+    {
+      "stock_symbol": "GHL",
+      "total_quantity": 69102.0,
+      "total_amount": 17626520.0,
+      "average_price": 255.08,
+      "txn_percentage": 1.64
+    },
+    {
+      "stock_symbol": "SSHL",
+      "total_quantity": 67150.0,
+      "total_amount": 12944270.0,
+      "average_price": 192.77,
+      "txn_percentage": 1.21
+    },
+    {
+      "stock_symbol": "KKHC",
+      "total_quantity": 64300.0,
+      "total_amount": 18911004.0,
+      "average_price": 294.11,
+      "txn_percentage": 1.76
+    },
+    {
+      "stock_symbol": "GLH",
+      "total_quantity": 63030.0,
+      "total_amount": 18024222.0,
+      "average_price": 285.96,
+      "txn_percentage": 1.68
+    }
+  ],
+  "latest_date": "2026-02-17"
+}
