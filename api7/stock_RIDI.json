@@ -1,0 +1,219 @@
+{
+  "top_buy": [
+    {
+      "broker": 58,
+      "total_quantity": 1500704.0,
+      "total_amount": 490557364.0,
+      "average_price": 326.88,
+      "txn_percentage": 10.86
+    },
+    {
+      "broker": 42,
+      "total_quantity": 806938.0,
+      "total_amount": 265340804.0,
+      "average_price": 328.82,
+      "txn_percentage": 5.87
+    },
+    {
+      "broker": 38,
+      "total_quantity": 678312.0,
+      "total_amount": 220119692.0,
+      "average_price": 324.51,
+      "txn_percentage": 4.87
+    },
+    {
+      "broker": 77,
+      "total_quantity": 592464.0,
+      "total_amount": 193408472.0,
+      "average_price": 326.45,
+      "txn_percentage": 4.28
+    },
+    {
+      "broker": 56,
+      "total_quantity": 519464.0,
+      "total_amount": 169699178.0,
+      "average_price": 326.68,
+      "txn_percentage": 3.76
+    },
+    {
+      "broker": 45,
+      "total_quantity": 390018.0,
+      "total_amount": 125477224.0,
+      "average_price": 321.72,
+      "txn_percentage": 2.78
+    },
+    {
+      "broker": 64,
+      "total_quantity": 388394.0,
+      "total_amount": 128796622.0,
+      "average_price": 331.61,
+      "txn_percentage": 2.85
+    },
+    {
+      "broker": 62,
+      "total_quantity": 386812.0,
+      "total_amount": 126028750.0,
+      "average_price": 325.81,
+      "txn_percentage": 2.79
+    },
+    {
+      "broker": 29,
+      "total_quantity": 373404.0,
+      "total_amount": 124724088.0,
+      "average_price": 334.02,
+      "txn_percentage": 2.76
+    },
+    {
+      "broker": 48,
+      "total_quantity": 361996.0,
+      "total_amount": 117758498.0,
+      "average_price": 325.3,
+      "txn_percentage": 2.61
+    }
+  ],
+  "top_sell": [
+    {
+      "broker": 58,
+      "total_quantity": 1621056.0,
+      "total_amount": 533346148.0,
+      "average_price": 329.01,
+      "txn_percentage": 11.81
+    },
+    {
+      "broker": 57,
+      "total_quantity": 760422.0,
+      "total_amount": 249184538.0,
+      "average_price": 327.69,
+      "txn_percentage": 5.52
+    },
+    {
+      "broker": 49,
+      "total_quantity": 607424.0,
+      "total_amount": 198226058.0,
+      "average_price": 326.34,
+      "txn_percentage": 4.39
+    },
+    {
+      "broker": 56,
+      "total_quantity": 565080.0,
+      "total_amount": 185055118.0,
+      "average_price": 327.48,
+      "txn_percentage": 4.1
+    },
+    {
+      "broker": 45,
+      "total_quantity": 557138.0,
+      "total_amount": 183293246.0,
+      "average_price": 328.99,
+      "txn_percentage": 4.06
+    },
+    {
+      "broker": 38,
+      "total_quantity": 386226.0,
+      "total_amount": 125507570.0,
+      "average_price": 324.96,
+      "txn_percentage": 2.78
+    },
+    {
+      "broker": 62,
+      "total_quantity": 342704.0,
+      "total_amount": 112578658.0,
+      "average_price": 328.5,
+      "txn_percentage": 2.49
+    },
+    {
+      "broker": 48,
+      "total_quantity": 317286.0,
+      "total_amount": 103644814.0,
+      "average_price": 326.66,
+      "txn_percentage": 2.29
+    },
+    {
+      "broker": 34,
+      "total_quantity": 299832.0,
+      "total_amount": 97246708.0,
+      "average_price": 324.34,
+      "txn_percentage": 2.15
+    },
+    {
+      "broker": 35,
+      "total_quantity": 282614.0,
+      "total_amount": 93387420.0,
+      "average_price": 330.44,
+      "txn_percentage": 2.07
+    }
+  ],
+  "top_holdings": [
+    {
+      "broker": 42,
+      "total_quantity": 275085.0,
+      "total_amount": 91211027.0,
+      "average_price": 331.57,
+      "txn_percentage": 8.19
+    },
+    {
+      "broker": 57,
+      "total_quantity": 268443.0,
+      "total_amount": 87823391.0,
+      "average_price": 327.16,
+      "txn_percentage": 7.89
+    },
+    {
+      "broker": 77,
+      "total_quantity": 235139.0,
+      "total_amount": 76576669.0,
+      "average_price": 325.67,
+      "txn_percentage": 6.88
+    },
+    {
+      "broker": 49,
+      "total_quantity": 176401.0,
+      "total_amount": 57283320.0,
+      "average_price": 324.73,
+      "txn_percentage": 5.14
+    },
+    {
+      "broker": 64,
+      "total_quantity": 174092.0,
+      "total_amount": 57761073.0,
+      "average_price": 331.78,
+      "txn_percentage": 5.19
+    },
+    {
+      "broker": 38,
+      "total_quantity": 146043.0,
+      "total_amount": 47306061.0,
+      "average_price": 323.92,
+      "txn_percentage": 4.25
+    },
+    {
+      "broker": 41,
+      "total_quantity": 96653.0,
+      "total_amount": 31658371.0,
+      "average_price": 327.55,
+      "txn_percentage": 2.84
+    },
+    {
+      "broker": 45,
+      "total_quantity": 83560.0,
+      "total_amount": 28908011.0,
+      "average_price": 345.96,
+      "txn_percentage": 2.6
+    },
+    {
+      "broker": 47,
+      "total_quantity": 83075.0,
+      "total_amount": 27171900.0,
+      "average_price": 327.08,
+      "txn_percentage": 2.44
+    },
+    {
+      "broker": 60,
+      "total_quantity": 78151.0,
+      "total_amount": 26253362.0,
+      "average_price": 335.93,
+      "txn_percentage": 2.36
+    }
+  ],
+  "latest_date": "2026-02-17"
+}
