@@ -1,0 +1,147 @@
+{
+  "top_buy": [
+    {
+      "stock_symbol": "SHPC",
+      "total_quantity": 518762.0,
+      "total_amount": 280621050.0,
+      "average_price": 540.94,
+      "txn_percentage": 11.49
+    },
+    {
+      "stock_symbol": "AKJCL",
+      "total_quantity": 402752.0,
+      "total_amount": 152597090.0,
+      "average_price": 378.89,
+      "txn_percentage": 6.25
+    },
+    {
+      "stock_symbol": "RIDI",
+      "total_quantity": 361996.0,
+      "total_amount": 117758498.0,
+      "average_price": 325.3,
+      "txn_percentage": 4.82
+    },
+    {
+      "stock_symbol": "HURJA",
+      "total_quantity": 234852.0,
+      "total_amount": 65497950.0,
+      "average_price": 278.89,
+      "txn_percentage": 2.68
+    },
+    {
+      "stock_symbol": "SAIL",
+      "total_quantity": 221796.0,
+      "total_amount": 307232014.0,
+      "average_price": 1385.2,
+      "txn_percentage": 12.58
+    },
+    {
+      "stock_symbol": "HIDCLP",
+      "total_quantity": 177966.0,
+      "total_amount": 33879760.0,
+      "average_price": 190.37,
+      "txn_percentage": 1.39
+    },
+    {
+      "stock_symbol": "HDHPC",
+      "total_quantity": 157542.0,
+      "total_amount": 32574608.0,
+      "average_price": 206.77,
+      "txn_percentage": 1.33
+    },
+    {
+      "stock_symbol": "NGPL",
+      "total_quantity": 148916.0,
+      "total_amount": 64649122.0,
+      "average_price": 434.13,
+      "txn_percentage": 2.65
+    },
+    {
+      "stock_symbol": "UPCL",
+      "total_quantity": 137834.0,
+      "total_amount": 52612166.0,
+      "average_price": 381.71,
+      "txn_percentage": 2.15
+    },
+    {
+      "stock_symbol": "SHEL",
+      "total_quantity": 133560.0,
+      "total_amount": 42187048.0,
+      "average_price": 315.87,
+      "txn_percentage": 1.73
+    }
+  ],
+  "top_sell": [
+    {
+      "stock_symbol": "HURJA",
+      "total_quantity": 437302.0,
+      "total_amount": 119383218.0,
+      "average_price": 273.0,
+      "txn_percentage": 5.25
+    },
+    {
+      "stock_symbol": "RIDI",
+      "total_quantity": 317286.0,
+      "total_amount": 103644814.0,
+      "average_price": 326.66,
+      "txn_percentage": 4.56
+    },
+    {
+      "stock_symbol": "AKJCL",
+      "total_quantity": 313014.0,
+      "total_amount": 116320760.0,
+      "average_price": 371.62,
+      "txn_percentage": 5.12
+    },
+    {
+      "stock_symbol": "NGPL",
+      "total_quantity": 240642.0,
+      "total_amount": 104479616.0,
+      "average_price": 434.17,
+      "txn_percentage": 4.6
+    },
+    {
+      "stock_symbol": "SAIL",
+      "total_quantity": 231352.0,
+      "total_amount": 315123686.0,
+      "average_price": 1362.1,
+      "txn_percentage": 13.86
+    },
+    {
+      "stock_symbol": "DORDI",
+      "total_quantity": 189212.0,
+      "total_amount": 55497884.0,
+      "average_price": 293.31,
+      "txn_percentage": 2.44
+    },
+    {
+      "stock_symbol": "SHPC",
+      "total_quantity": 174920.0,
+      "total_amount": 95299688.0,
+      "average_price": 544.82,
+      "txn_percentage": 4.19
+    },
+    {
+      "stock_symbol": "AHPC",
+      "total_quantity": 170808.0,
+      "total_amount": 49252274.0,
+      "average_price": 288.35,
+      "txn_percentage": 2.17
+    },
+    {
+      "stock_symbol": "SHEL",
+      "total_quantity": 168630.0,
+      "total_amount": 53612716.0,
+      "average_price": 317.93,
+      "txn_percentage": 2.36
+    },
+    {
+      "stock_symbol": "HDHPC",
+      "total_quantity": 134430.0,
+      "total_amount": 27698216.0,
+      "average_price": 206.04,
+      "txn_percentage": 1.22
+    }
+  ],
+  "latest_date": "2026-02-17"
+}
