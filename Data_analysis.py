@@ -1,189 +1,117 @@
-import streamlit as st
-import requests
-import pandas as pd
 import json
-import os
-import base64
-from datetime import datetime
+import time
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
 
-# =========================
-# CONFIG & SECRETS
-# =========================
+# ----------------------------
+# CONFIG
+# ----------------------------
+DATA_PATH = "data/raw/ULHC.json"
 
-GITHUB_TOKEN = st.secrets["github"]["token"]
-GITHUB_REPO = st.secrets["github"]["repo"]
+st.set_page_config(
+    page_title="NEPSE Chart Replay",
+    layout="wide"
+)
 
-NEPSE_FSK = st.secrets["nepse_alpha"]["fsk"]
-NEPSE_COOKIE = st.secrets["nepse_alpha"]["cookie"]
-NEPSE_UA = st.secrets["nepse_alpha"]["user_agent"]
+st.title("📈 NEPSE Chart Replay Engine")
+st.caption("Price only. No hindsight. No excuses.")
 
-NAVYA_AUTH = st.secrets["navya"]["auth_bearer"]
-NAVYA_COOKIE = st.secrets["navya"]["cookie"]
+# ----------------------------
+# LOAD DATA
+# ----------------------------
+@st.cache_data
+def load_data(path):
+    with open(path, "r") as f:
+        raw = json.load(f)
 
-DATA_DIR = "data"
-os.makedirs(DATA_DIR, exist_ok=True)
+    df = pd.DataFrame({
+        "time": pd.to_datetime(raw["t"], unit="s"),
+        "open": raw["o"],
+        "high": raw["h"],
+        "low": raw["l"],
+        "close": raw["c"],
+        "volume": raw["v"]
+    })
 
-# =========================
-# COMMON HELPERS
-# =========================
+    return df.sort_values("time").reset_index(drop=True)
 
-def save_csv(df, filename):
-    path = os.path.join(DATA_DIR, filename)
-    df.to_csv(path, index=False)
-    return path
+df = load_data(DATA_PATH)
 
-def save_json(data, filename):
-    path = os.path.join(DATA_DIR, filename)
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
-    return path
+# ----------------------------
+# CONTROLS
+# ----------------------------
+col1, col2, col3 = st.columns(3)
 
-def github_upload(file_path):
-    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{file_path}"
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github+json"
-    }
-
-    with open(file_path, "rb") as f:
-        content = base64.b64encode(f.read()).decode()
-
-    payload = {
-        "message": f"Add {file_path}",
-        "content": content
-    }
-
-    r = requests.put(url, headers=headers, json=payload)
-    return r.status_code == 201
-
-# =========================
-# NAVYA APIs
-# =========================
-
-def fetch_navya_macro(category="macro"):
-    url = f"https://navyaadvisors.com/api_endpoint/market_cap_valuation/{category}"
-    headers = {
-        "Authorization": NAVYA_AUTH,
-        "Cookie": NAVYA_COOKIE,
-        "Accept": "application/json"
-    }
-    r = requests.get(url, headers=headers)
-    return r.json()
-
-def fetch_navya_highlow():
-    url = "https://navyaadvisors.com/api_endpoint/stocks/highlow"
-    headers = {
-        "Authorization": NAVYA_AUTH,
-        "Cookie": NAVYA_COOKIE
-    }
-    r = requests.get(url, headers=headers)
-    return r.json()
-
-# =========================
-# NEPSEALPHA APIs
-# =========================
-
-def fetch_nepse_history(symbol, resolution=1, frame=1):
-    url = (
-        "https://www.nepsealpha.com/trading/1/history"
-        f"?fsk={NEPSE_FSK}&symbol={symbol}&resolution={resolution}&frame={frame}"
-    )
-    headers = {
-        "User-Agent": NEPSE_UA,
-        "Cookie": NEPSE_COOKIE,
-        "Accept": "application/json"
-    }
-
-    r = requests.get(url, headers=headers)
-
-    if r.status_code != 200:
-        return {"error": f"HTTP {r.status_code}", "text": r.text[:500]}
-
-    if "application/json" not in r.headers.get("Content-Type", ""):
-        return {
-            "error": "Non-JSON response",
-            "content_type": r.headers.get("Content-Type"),
-            "text": r.text[:500]
-        }
-
-    try:
-        return r.json()
-    except Exception as e:
-        return {
-            "error": "JSON decode failed",
-            "exception": str(e),
-            "raw": r.text[:500]
-        }
-
-
-def fetch_floorsheet_live(symbol, buyer="", seller=""):
-    url = (
-        "https://nepsealpha.com/floorsheet-live-today/filter"
-        f"?fsk={NEPSE_FSK}&stockSymbol={symbol}&buyer={buyer}&seller={seller}&itemsPerPage=500"
+with col1:
+    max_candles = st.slider(
+        "Visible candles",
+        min_value=20,
+        max_value=len(df),
+        value=100,
+        step=1
     )
 
-    headers = {
-        "User-Agent": NEPSE_UA,
-        "Cookie": NEPSE_COOKIE,
-        "Accept": "application/json"
-    }
+with col2:
+    speed = st.select_slider(
+        "Replay speed (seconds per candle)",
+        options=[0.1, 0.25, 0.5, 1.0, 2.0],
+        value=0.5
+    )
 
-    r = requests.get(url, headers=headers)
+with col3:
+    auto_play = st.toggle("▶ Auto Replay", value=False)
 
-    if r.status_code != 200:
-        return {"error": f"HTTP {r.status_code}", "text": r.text[:500]}
+# ----------------------------
+# REPLAY STATE
+# ----------------------------
+if "cursor" not in st.session_state:
+    st.session_state.cursor = max_candles
 
-    if "application/json" not in r.headers.get("Content-Type", ""):
-        return {
-            "error": "Non-JSON response",
-            "content_type": r.headers.get("Content-Type"),
-            "text": r.text[:500]
-        }
+if auto_play:
+    if st.session_state.cursor < len(df):
+        st.session_state.cursor += 1
+        time.sleep(speed)
+        st.rerun()
+else:
+    st.session_state.cursor = max_candles
 
-    try:
-        return r.json()
-    except Exception as e:
-        return {
-            "error": "JSON decode failed",
-            "exception": str(e),
-            "raw": r.text[:500]
-        }
+visible_df = df.iloc[:st.session_state.cursor]
 
+# ----------------------------
+# CHART
+# ----------------------------
+fig = go.Figure()
 
-# =========================
-# STREAMLIT UI
-# =========================
+fig.add_candlestick(
+    x=visible_df["time"],
+    open=visible_df["open"],
+    high=visible_df["high"],
+    low=visible_df["low"],
+    close=visible_df["close"],
+    name="Price"
+)
 
-st.title("📊 Pro Stock Tracker – Data Engine")
+fig.update_layout(
+    height=600,
+    xaxis_rangeslider_visible=False,
+    template="plotly_dark",
+    title=f"Candles shown: {len(visible_df)} / {len(df)}"
+)
 
-st.subheader("Navya Advisors")
+st.plotly_chart(fig, use_container_width=True)
 
-if st.button("Fetch Market Cap (Macro)"):
-    data = fetch_navya_macro("macro")
-    df = pd.DataFrame(data)
-    file = save_csv(df, "navya_macro.csv")
-    github_upload(file)
-    st.success("Navya Macro data saved & uploaded")
+# ----------------------------
+# INFO PANEL
+# ----------------------------
+last = visible_df.iloc[-1]
 
-if st.button("Fetch 52 Week High/Low"):
-    data = fetch_navya_highlow()
-    df = pd.DataFrame(data)
-    file = save_csv(df, "navya_highlow.csv")
-    github_upload(file)
-    st.success("High/Low data saved & uploaded")
-
-st.subheader("NepseAlpha")
-
-symbol = st.text_input("Stock Symbol", "ULHC")
-
-if st.button("Fetch Trading History"):
-    data = fetch_nepse_history(symbol)
-    file = save_json(data, f"history_{symbol}.json")
-    github_upload(file)
-    st.success("Trading history saved & uploaded")
-
-if st.button("Fetch Floorsheet Live"):
-    data = fetch_floorsheet_live(symbol)
-    file = save_json(data, f"floorsheet_live_{symbol}.json")
-    github_upload(file)
-    st.success("Floorsheet saved & uploaded")
+st.markdown("### 📌 Current Candle")
+st.write({
+    "Date": str(last["time"]),
+    "Open": last["open"],
+    "High": last["high"],
+    "Low": last["low"],
+    "Close": last["close"],
+    "Volume": last["volume"]
+})
