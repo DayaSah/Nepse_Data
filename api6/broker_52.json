@@ -1,0 +1,147 @@
+{
+  "top_buy": [
+    {
+      "stock_symbol": "RMF1",
+      "total_quantity": 600000.0,
+      "total_amount": 5708742.0,
+      "average_price": 9.51,
+      "txn_percentage": 0.71
+    },
+    {
+      "stock_symbol": "SBCF",
+      "total_quantity": 238910.0,
+      "total_amount": 2327688.0,
+      "average_price": 9.74,
+      "txn_percentage": 0.29
+    },
+    {
+      "stock_symbol": "NBF3",
+      "total_quantity": 174298.0,
+      "total_amount": 1697152.0,
+      "average_price": 9.74,
+      "txn_percentage": 0.21
+    },
+    {
+      "stock_symbol": "SCB",
+      "total_quantity": 148816.0,
+      "total_amount": 95090264.0,
+      "average_price": 638.98,
+      "txn_percentage": 11.84
+    },
+    {
+      "stock_symbol": "AKPL",
+      "total_quantity": 133158.0,
+      "total_amount": 36581726.0,
+      "average_price": 274.72,
+      "txn_percentage": 4.56
+    },
+    {
+      "stock_symbol": "SHEL",
+      "total_quantity": 108464.0,
+      "total_amount": 34332224.0,
+      "average_price": 316.53,
+      "txn_percentage": 4.28
+    },
+    {
+      "stock_symbol": "NICGF2",
+      "total_quantity": 104200.0,
+      "total_amount": 980216.0,
+      "average_price": 9.41,
+      "txn_percentage": 0.12
+    },
+    {
+      "stock_symbol": "HDHPC",
+      "total_quantity": 101676.0,
+      "total_amount": 20849212.0,
+      "average_price": 205.06,
+      "txn_percentage": 2.6
+    },
+    {
+      "stock_symbol": "RIDI",
+      "total_quantity": 78060.0,
+      "total_amount": 25577634.0,
+      "average_price": 327.67,
+      "txn_percentage": 3.19
+    },
+    {
+      "stock_symbol": "NHPC",
+      "total_quantity": 67560.0,
+      "total_amount": 15908586.0,
+      "average_price": 235.47,
+      "txn_percentage": 1.98
+    }
+  ],
+  "top_sell": [
+    {
+      "stock_symbol": "MLBLPO",
+      "total_quantity": 840000.0,
+      "total_amount": 162120000.0,
+      "average_price": 193.0,
+      "txn_percentage": 18.27
+    },
+    {
+      "stock_symbol": "RIDI",
+      "total_quantity": 126298.0,
+      "total_amount": 40947580.0,
+      "average_price": 324.21,
+      "txn_percentage": 4.61
+    },
+    {
+      "stock_symbol": "PPL",
+      "total_quantity": 107360.0,
+      "total_amount": 42200290.0,
+      "average_price": 393.07,
+      "txn_percentage": 4.75
+    },
+    {
+      "stock_symbol": "PHCL",
+      "total_quantity": 95572.0,
+      "total_amount": 29472498.0,
+      "average_price": 308.38,
+      "txn_percentage": 3.32
+    },
+    {
+      "stock_symbol": "HURJA",
+      "total_quantity": 88494.0,
+      "total_amount": 24529822.0,
+      "average_price": 277.19,
+      "txn_percentage": 2.76
+    },
+    {
+      "stock_symbol": "HDHPC",
+      "total_quantity": 83940.0,
+      "total_amount": 17744610.0,
+      "average_price": 211.4,
+      "txn_percentage": 2.0
+    },
+    {
+      "stock_symbol": "SHEL",
+      "total_quantity": 80576.0,
+      "total_amount": 25482860.0,
+      "average_price": 316.26,
+      "txn_percentage": 2.87
+    },
+    {
+      "stock_symbol": "AKJCL",
+      "total_quantity": 75398.0,
+      "total_amount": 28702442.0,
+      "average_price": 380.68,
+      "txn_percentage": 3.23
+    },
+    {
+      "stock_symbol": "SSHL",
+      "total_quantity": 69818.0,
+      "total_amount": 13590798.0,
+      "average_price": 194.66,
+      "txn_percentage": 1.53
+    },
+    {
+      "stock_symbol": "BHL",
+      "total_quantity": 69740.0,
+      "total_amount": 14359286.0,
+      "average_price": 205.9,
+      "txn_percentage": 1.62
+    }
+  ],
+  "latest_date": "2026-02-17"
+}
