@@ -7,16 +7,18 @@ from pymongo import MongoClient
 # We use st.cache_resource so it only connects to MongoDB once and doesn't crash the app
 @st.cache_resource
 def init_connection():
-    # You will need to add your MongoDB URI to Streamlit's secrets later!
-    # For local testing, you can temporarily replace st.secrets["mongo"]["uri"] 
-    # with your actual string: "mongodb+srv://username:password@cluster..."
     try:
-        # Default placeholder. We'll guide you on how to set this up properly.
-        uri = st.secrets.get("mongo", {}).get("uri", "mongodb://localhost:27017") 
+        # Force it to look for the secret, no localhost fallback!
+        uri = st.secrets["mongo"]["uri"] 
         client = MongoClient(uri)
+        # Test the connection quickly
+        client.admin.command('ping')
         return client
+    except KeyError:
+        st.error("❌ Secrets not found! If running locally, make sure .streamlit/secrets.toml exists.")
+        return None
     except Exception as e:
-        st.error(f"Database Connection Failed: {e}")
+        st.error(f"❌ Database Connection Failed: {e}")
         return None
 
 def run():
