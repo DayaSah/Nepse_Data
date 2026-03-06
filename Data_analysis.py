@@ -8,33 +8,47 @@ st.set_page_config(page_title="NEPSE Quantum Matrix", page_icon="🌌", layout="
 from Tabs import dashboard, stock_analysis, tms_analysis, data_injector, stock_graph, predictor
 
 # --- 1. LOGIN SYSTEM ---
-def check_password():
-    """Returns `True` if the user had the correct password."""
-    def password_entered():
-        if st.session_state["password"] == "quantum2026": # Change this password later!
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]  # Don't store password
-        else:
-            st.session_state["password_correct"] = False
+def check_credentials():
+    """Returns True if the user enters the correct username and password."""
+    
+    # Initialize session state variables if they don't exist
+    if "credentials_correct" not in st.session_state:
+        st.session_state["credentials_correct"] = False
 
-    if "password_correct" not in st.session_state:
-        # First run, show inputs for password.
-        st.markdown("## 🌌 Multiversal Market Matrix | Authentication")
-        st.text_input("Enter Encryption Key (Password)", type="password", on_change=password_entered, key="password")
-        return False
-    elif not st.session_state["password_correct"]:
-        # Password incorrect, show input + error.
-        st.markdown("## 🌌 Multiversal Market Matrix | Authentication")
-        st.text_input("Enter Encryption Key (Password)", type="password", on_change=password_entered, key="password")
-        st.error("❌ Access Denied. Invalid Frequency.")
-        return False
-    else:
-        # Password correct.
+    def verify_login():
+        # Check if the inputs match the secrets
+        expected_user = st.secrets["credentials"]["username"]
+        expected_pass = st.secrets["credentials"]["password"]
+        
+        if st.session_state["user_input"] == expected_user and st.session_state["pass_input"] == expected_pass:
+            st.session_state["credentials_correct"] = True
+            # Clear passwords from memory for security
+            del st.session_state["pass_input"]
+        else:
+            st.session_state["credentials_correct"] = False
+            st.session_state["login_failed"] = True
+
+    # If already logged in, let them through
+    if st.session_state["credentials_correct"]:
         return True
 
+    # If not logged in, show the login screen
+    st.markdown("## 🌌 Multiversal Market Matrix | Authentication")
+    st.text_input("Username", key="user_input")
+    st.text_input("Encryption Key (Password)", type="password", key="pass_input")
+    
+    st.button("Initiate Link", on_click=verify_login)
+    
+    # Show error if they tried and failed
+    if st.session_state.get("login_failed"):
+        st.error("❌ Access Denied. Invalid Frequency or Identity.")
+        
+    return False
+
 # --- 2. MAIN APP NAVIGATION ---
-if check_password():
+if check_credentials():  
     st.sidebar.title("🪐 Operations Menu")
+    
     st.sidebar.markdown("---")
     
     # Define the tabs
