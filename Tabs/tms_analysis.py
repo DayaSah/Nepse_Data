@@ -1,22 +1,32 @@
 import streamlit as st
+import os
+
+# Important: We need to import the SubTabs module
+try:
+    from Tabs.SubTabs import Stock_Hold
+except ImportError:
+    st.error("❌ Failed to load SubTabs. Make sure Tabs/SubTabs/Stock_Hold.py exists and __init__.py is in both folders.")
 
 def run():
-    st.title("📘 TMS-Centric Surveillance")
-    st.markdown("Input a Broker (TMS) ID to reveal their entire trading wave-function (Buy/Sell/Holdings).")
+    st.title("📘 Broker Telemetry (TMS Analysis)")
+    st.markdown("Analyze specific TMS data flows and broker inventory.")
     
-    tms_id = st.text_input("Enter Broker TMS ID (e.g., 58, 34):", "")
+    # Define SubTabs
+    tab1, tab2, tab3 = st.tabs([
+        "📊 TMS Stock Holding", 
+        "🔄 Trade Flow Matrix", 
+        "🐳 Whale Tracker"
+    ])
     
-    if tms_id:
-        st.warning(f"Intercepting order flow for Broker TMS-{tms_id}...")
+    with tab1:
+        # We call the run() function from the Stock_Hold module
+        try:
+            Stock_Hold.run()
+        except Exception as e:
+            st.warning("⚠️ Module 'Stock_Hold' is currently under construction or missing.")
+            
+    with tab2:
+        st.info("The Trade Flow Matrix will be implemented in Step 2.")
         
-        st.subheader(f"Current Portfolio Holdings for TMS-{tms_id}")
-        # Simulated Portfolio Data
-        st.dataframe({
-            "Stock": ["NHPC", "NICA", "SHIVM", "HDHPC"],
-            "Total Bought": [100000, 5000, 25000, 80000],
-            "Total Sold": [20000, 4500, 10000, 80000],
-            "Net Holding": [80000, 500, 15000, 0]
-        })
-        
-        st.subheader("Recent Market Activity")
-        st.line_chart([5, 10, 8, 15, 20, 18, 25]) # Represents trading volume over time
+    with tab3:
+        st.info("The Whale Tracker will be implemented in Step 3.")
