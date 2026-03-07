@@ -452,7 +452,7 @@ def run():
                 st.markdown("Tracks the cumulative inventory of **every single broker** simultaneously.")
                 st.info("💡 **Pro Tip:** Double-click any broker in the legend to isolate their line, or single-click to turn them off.")
                 
-                race_df = fetch_broker_race_data(stock_symbol, valid_collections)
+                race_df = fetch_broker_race_data(stock_symbol)
                 
                 if not race_df.empty:
                     # Safely apply the new start_date and end_date to race_df
