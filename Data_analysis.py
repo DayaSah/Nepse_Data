@@ -66,7 +66,8 @@ if check_credentials():
         "📘 TMS Data Analysis": tms_analysis,
         "💉 Data Injector": data_injector,
         "📉 Stock Graphing": stock_graph,
-        "🔮 AI Predictor": predictor
+        "🔮 AI Predictor": predictor,
+        "Nepse terminal Advanced Data Analysis": Nepse_Terminal
     }
     
     # Sidebar selection
