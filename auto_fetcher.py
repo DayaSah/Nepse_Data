@@ -12,7 +12,11 @@ MONGO_URI = os.getenv("MONGO_URI")
 def get_db():
     try:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=15000)
-        return client["StockHoldingByTMS"] 
+        db = client["StockHoldingByTMS"]
+        
+        # V2 OPTIMIZATION: Ensure the high-speed index exists on startup
+        db["market_trades"].create_index([("stock", 1), ("date", -1), ("broker", 1)])
+        return db
     except Exception as e:
         print(f"🔴 CONNECTION ERROR: {e}")
         return None
@@ -24,15 +28,15 @@ DEAD_BROKERS = [2, 9, 12, 15, 27, 30, 31, 54]
 ACTIVE_BROKERS = [str(i) for i in range(1, 91) if i not in DEAD_BROKERS]
 
 def get_tracked_stocks():
-    """Scans MongoDB to find which stock symbols are already present."""
+    """Scans the master market_trades collection to find which stock symbols are actively tracked."""
     if db is None: return []
-    collections = db.list_collection_names()
-    stocks = set()
-    for col in collections:
-        if "_" in col:  # Matches your "ULHC_58" format
-            stock_symbol = col.split("_")[0]
-            stocks.add(stock_symbol)
-    return list(stocks)
+    try:
+        # V2 OPTIMIZATION: Use distinct() to instantly get all unique stocks from the master collection
+        stocks = db["market_trades"].distinct("stock")
+        return list(stocks)
+    except Exception as e:
+        print(f"⚠️ Error scanning for tracked stocks: {e}")
+        return []
 
 def safe_num(val, is_float=False):
     if val is None or str(val).strip() == "": return 0.0 if is_float else 0
@@ -46,23 +50,31 @@ async def global_network_radar(response):
         try:
             parsed = urlparse(response.url)
             qs = parse_qs(parsed.query)
-            symbol, broker = qs.get('symbol', [None])[0], qs.get('broker', [None])[0]
+            symbol = qs.get('symbol', [None])[0]
+            broker = qs.get('broker', [None])[0]
+            
+            if not symbol or not broker: return
             
             json_data = await response.json()
             records = json_data.get("data", [])
             
             if records:
-                collection = db[f"{symbol}_{broker}"]
+                market_trades = db["market_trades"]
                 for r in records:
-                    collection.update_one(
-                        {"date": r.get("date")},
+                    # V2 OPTIMIZATION: Update the Master Collection with stock and broker fields
+                    market_trades.update_one(
+                        {
+                            "stock": symbol, 
+                            "broker": str(broker), 
+                            "date": r.get("date")
+                        },
                         {"$set": {
                             "b_qty": safe_num(r.get("b_qty")),
                             "s_qty": safe_num(r.get("s_qty")),
                             "b_amt": safe_num(r.get("b_amt"), True),
                             "s_amt": safe_num(r.get("s_amt"), True)
                         }},
-                        upsert=True # Updates existing dates, adds new ones!
+                        upsert=True # Updates existing dates, adds new ones! No duplicates!
                     )
                 print(f"   🎯 [UPDATED] {symbol} | Broker {broker}: {len(records)} records.")
         except Exception: pass
@@ -74,7 +86,7 @@ async def run_automation():
         return
 
     print("="*40)
-    print(f"☁️ NEPSE GHOST FETCHER (GitHub Actions)")
+    print(f"☁️ NEPSE GHOST FETCHER (V2 Master Architecture)")
     print(f"🔄 Updating stocks: {', '.join(stocks_to_update)}")
     print("="*40)
 
@@ -101,14 +113,12 @@ async def run_automation():
             return
 
         for stock in stocks_to_update:
-            print(f"\n📈 Starting Weekly Fetch for: {stock}")
+            print(f"\n📈 Starting Fetch for: {stock}")
             for b_id in ACTIVE_BROKERS:
-                # dateRangeType changed to 30days to ensure we don't miss long weekends/holidays
                 api_url = f"https://nepsealpha.com/floorsheet-history/filter?fsk=1772847797646&symbol={stock}&broker={b_id}&dateRangeType=1month"
                 
                 try:
                     await page.goto(api_url, timeout=30000)
-                    # Slightly faster wait times since GitHub IPs are highly trusted
                     await asyncio.sleep(random.uniform(3, 7)) 
                 except Exception:
                     print(f"⚠️ Broker {b_id} timed out. Skipping...")
