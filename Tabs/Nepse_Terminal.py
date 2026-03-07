@@ -142,26 +142,50 @@ def run():
             st.warning(f"No data found for {selected_col}.")
             return
             
-        # Global Date Filter
-        min_date, max_date = raw_df["Date"].min().date(), raw_df["Date"].max().date()
-        date_range = st.date_input("🗓️ Select Date Range:", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+        from datetime import timedelta
         
-        if len(date_range) == 2:
-            mask = (raw_df["Date"].dt.date >= date_range[0]) & (raw_df["Date"].dt.date <= date_range[1])
-            df = raw_df.loc[mask].copy().reset_index(drop=True)
-            df["Cum_Net_Qty"] = df["Net_Qty"].cumsum()
+        # --- SMART DATE FILTER ---
+        max_date = raw_df["Date"].max().date()
+        min_date_db = raw_df["Date"].min().date()
+        
+        st.markdown("**🗓️ Timeframe Selector**")
+        date_preset = st.radio(
+            "Timeframe",
+            ["7 Days", "15 Days", "30 Days", "3 Months", "6 Months", "1 Year", "2 Years", "Custom"],
+            index=3, # Default is set to index 3 ("3 Months" / 90 Days)
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        
+        if date_preset == "Custom":
+            date_range = st.date_input("Select Custom Range", value=(min_date_db, max_date), min_value=min_date_db, max_value=max_date)
+            if len(date_range) == 2:
+                start_date, end_date = date_range[0], date_range[1]
+            else:
+                start_date, end_date = min_date_db, max_date
         else:
-            df = raw_df.copy()
+            end_date = max_date
+            # Map presets to approximate days
+            days_map = {"7 Days": 7, "15 Days": 15, "30 Days": 30, "3 Months": 90, "6 Months": 180, "1 Year": 365, "2 Years": 730}
+            start_date = end_date - timedelta(days=days_map[date_preset])
+            if start_date < min_date_db:
+                start_date = min_date_db
+
+        # Apply the filter mask
+        mask = (raw_df["Date"].dt.date >= start_date) & (raw_df["Date"].dt.date <= end_date)
+        df = raw_df.loc[mask].copy().reset_index(drop=True)
+        df["Cum_Net_Qty"] = df["Net_Qty"].cumsum()
 
         # --- SETUP 6 MEGA TABS ---
-        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7,tab8 = st.tabs([
             "📂 Ledger & Matrix", 
             "🚀 Advanced Metrics", 
             "📊 Optics & Trends", 
             "🐳 Volume & Whales", 
             "🤖 AI Advisor",
             "🌐 Collective TMS (Market Macro)",
-            "📦 Broker Inventory Race"
+            "📦 Broker Inventory Race",
+            "🎯 Market Results"
         ])
         
         # ------------------------------------------
@@ -470,3 +494,73 @@ def run():
                     with ld2:
                         st.error("**Top 5 Dumpers (Sold the most short/cleared out)**")
                         st.dataframe(final_standings.tail(5), use_container_width=True)
+
+        # ------------------------------------------
+        # TAB 7: AUTOMATED RESULTS & SIGNALS (90-DAY MACRO)
+        # ------------------------------------------
+        with tab8:
+            st.subheader(f"🎯 90-Day Master Results: {stock_symbol}")
+            st.markdown(f"Automated intelligence scanning all 90 brokers for **{stock_symbol}** over the last 90 trading days.")
+            
+            # Fetch all brokers for this stock
+            res_df = fetch_broker_race_data(stock_symbol, valid_collections)
+            
+            if res_df.empty:
+                st.warning("Not enough market data to generate results.")
+            else:
+                # Force strictly the last 90 days for this specific analysis tab
+                res_end = res_df["Date"].max()
+                res_start = res_end - timedelta(days=90)
+                res_df = res_df[(res_df["Date"] >= res_start) & (res_df["Date"] <= res_end)]
+                
+                # Group by Broker to find net winners and losers
+                res_grouped = res_df.groupby("Broker").agg({"Net_Qty": "sum"}).reset_index()
+                
+                top_buyers = res_grouped[res_grouped["Net_Qty"] > 0].sort_values("Net_Qty", ascending=False).reset_index(drop=True)
+                top_sellers = res_grouped[res_grouped["Net_Qty"] < 0].sort_values("Net_Qty", ascending=True).reset_index(drop=True)
+                
+                total_absorbed = top_buyers["Net_Qty"].sum()
+                total_dumped = abs(top_sellers["Net_Qty"].sum())
+                
+                # --- METRICS ROW ---
+                st.write("---")
+                c1, c2, c3 = st.columns(3)
+                
+                if not top_buyers.empty:
+                    apex = top_buyers.iloc[0]
+                    c1.metric("👑 The Apex Accumulator", apex["Broker"], f"+{apex['Net_Qty']:,.0f} Shares")
+                
+                if not top_sellers.empty:
+                    weak = top_sellers.iloc[0]
+                    c2.metric("🩸 The Top Dumper", weak["Broker"], f"{weak['Net_Qty']:,.0f} Shares", delta_color="inverse")
+                
+                # Whale Momentum Logic
+                if total_absorbed > total_dumped:
+                    c3.metric("🐋 Whale Momentum", "BULLISH", "Accumulation > Distribution", delta_color="normal")
+                else:
+                    c3.metric("🐋 Whale Momentum", "BEARISH", "Distribution > Accumulation", delta_color="inverse")
+                
+                st.write("---")
+                
+                # --- VISUALIZING THE SQUEEZE ---
+                st.markdown("### 🧲 Supply Absorption (Top 5 vs Top 5)")
+                st.caption("Are the top buyers sucking up more shares than the top sellers are dumping?")
+                
+                t5_buy = top_buyers.head(5)["Net_Qty"].sum() if not top_buyers.empty else 0
+                t5_sell = abs(top_sellers.head(5)["Net_Qty"].sum()) if not top_sellers.empty else 0
+                
+                fig_vs = go.Figure(data=[
+                    go.Bar(name='Top 5 Buyers Absorbed', x=['Top 5 Impact'], y=[t5_buy], marker_color='#27ae60'),
+                    go.Bar(name='Top 5 Sellers Dumped', x=['Top 5 Impact'], y=[t5_sell], marker_color='#e74c3c')
+                ])
+                fig_vs.update_layout(barmode='group', height=400)
+                st.plotly_chart(fig_vs, use_container_width=True)
+                
+                # --- ACTIONABLE SIGNAL ---
+                st.markdown("### 🧠 Automated System Conclusion")
+                if t5_buy > (t5_sell * 1.2):
+                    st.success(f"**STRONG BUY SIGNAL:** The top 5 accumulators are aggressively absorbing the float for {stock_symbol}. Supply is drying up.")
+                elif t5_sell > (t5_buy * 1.2):
+                    st.error(f"**DISTRIBUTION WARNING:** Major brokers are unloading {stock_symbol} onto retail. Wait for the selling pressure to exhaust.")
+                else:
+                    st.info(f"**NEUTRAL TUG-OF-WAR:** Buyers and sellers are currently deadlocked on {stock_symbol}. Look at the Macro VWAP for support levels.")
