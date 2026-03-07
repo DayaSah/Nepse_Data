@@ -413,8 +413,8 @@ def run():
             else:
                 # Filter aggregate data using the same global date range
                 if len(date_range) == 2:
-                    mask = (agg_df["Date"].dt.date >= date_range[0]) & (agg_df["Date"].dt.date <= date_range[1])
-                    agg_df = agg_df.loc[mask].copy().reset_index(drop=True)
+                    mask = (race_df["Date"].dt.date >= start_date) & (race_df["Date"].dt.date <= end_date)
+                    race_df = race_df.loc[mask].copy()
                 
                 colA, colB = st.columns(2)
                 
@@ -458,8 +458,8 @@ def run():
                 
                 if not race_df.empty:
                     if len(date_range) == 2:
-                        mask = (race_df["Date"].dt.date >= date_range[0]) & (race_df["Date"].dt.date <= date_range[1])
-                        race_df = race_df.loc[mask].copy()
+                        mask = (agg_df["Date"].dt.date >= start_date) & (agg_df["Date"].dt.date <= end_date)
+                        agg_df = agg_df.loc[mask].copy().reset_index(drop=True)
                     
                     # Get the final standing of each broker to find the top accumulators/dumpers
                     final_standings = race_df.groupby("Broker")["Cum_Net_Qty"].last().sort_values(ascending=False)
