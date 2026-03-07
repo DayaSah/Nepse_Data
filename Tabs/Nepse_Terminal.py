@@ -496,14 +496,14 @@ def run():
                         st.dataframe(final_standings.tail(5), use_container_width=True)
 
         # ------------------------------------------
-        # TAB 7: AUTOMATED RESULTS & SIGNALS (90-DAY MACRO)
+        # TAB 8: AUTOMATED RESULTS & SIGNALS (90-DAY MACRO)
         # ------------------------------------------
         with tab8:
             st.subheader(f"🎯 90-Day Master Results: {stock_symbol}")
             st.markdown(f"Automated intelligence scanning all 90 brokers for **{stock_symbol}** over the last 90 trading days.")
             
-            # Fetch all brokers for this stock
-            res_df = fetch_broker_race_data(stock_symbol, valid_collections)
+            # Fetch all brokers for this stock (REMOVED valid_collections)
+            res_df = fetch_broker_race_data(stock_symbol)
             
             if res_df.empty:
                 st.warning("Not enough market data to generate results.")
