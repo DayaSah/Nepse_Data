@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from pymongo import MongoClient
 import google.generativeai as genai
+from openai import OpenAI
 
 # --- 1. MONGODB CONNECTION ---
 @st.cache_resource
@@ -28,6 +29,11 @@ try:
     model = genai.GenerativeModel('gemini-2.0-flash')
 except Exception as e:
     model = None
+
+try:
+    openai_client = OpenAI(api_key=st.secrets["openai"]["api_key"])
+except Exception as e:
+    openai_client = None
 
 # --- 3. DATA FETCHING & PREPARATION ---
 # --- 3. DATA FETCHING & PREPARATION (V2 OPTIMIZED) ---
@@ -355,49 +361,128 @@ def run():
             st.plotly_chart(fig3, use_container_width=True)
 
         # ------------------------------------------
-        # TAB 5: AI ADVISOR (GEMINI)
+        # ------------------------------------------
+        # TAB 5: AI ADVISOR (MULTI-ENGINE)
         # ------------------------------------------
         with tab5:
-            st.subheader("🤖 Wall Street AI Analyst")
-            st.markdown("Your personal AI analyst powered by Google Gemini.")
-            if model is None:
-                st.error("Gemini API not configured. Check secrets.toml.")
+            st.subheader("🤖 Multi-Engine Quant Advisor")
+            st.markdown("Cross-reference intelligence from the world's top AI models.")
+            
+            # Safe fallback in case openai_client wasn't initialized at the top
+            try:
+                _ = openai_client
+            except NameError:
+                openai_client = None
+
+            if model is None and openai_client is None:
+                st.error("⚠️ No AI API keys configured. Please add Gemini or OpenAI keys to secrets.toml.")
             else:
                 total_days = len(df)
                 recent_trend = df.tail(5)[["Date", "Net_Qty"]].to_string(index=False)
                 
-                user_question = st.text_input("Ask the AI a specific question, or leave blank for a general report:", 
-                                              placeholder="E.g., Are they accumulating or distributing? What is their WACC?")
+                # --- AI SELECTION UI ---
+                st.markdown("### 🧠 Select Your AI Analyst")
+                ai_engine = st.radio(
+                    "Choose AI Engine:", 
+                    ["🔵 Gemini 2.0 Flash", "🟢 ChatGPT (GPT-4o)", "🔥 Ultimate Consensus (Side-by-Side)"], 
+                    horizontal=True, 
+                    label_visibility="collapsed"
+                )
                 
-                if st.button("🧠 Generate AI Analysis", type="primary"):
-                    with st.spinner("🧠 Gemini is analyzing the order flow..."):
-                        prompt = f"""
-                        You are an elite quantitative analyst for the Nepal Stock Exchange (NEPSE). 
-                        I am providing you with the trading summary of {selected_col}.
-                        
-                        DATA SUMMARY:
-                        - Trading Days Logged: {total_days}
-                        - Current Holding Inventory (Net Qty): {current_inventory}
-                        - Estimated Weighted Average Cost (WACC): Rs {buy_wacc:.2f}
-                        
-                        RECENT 5-DAY MOMENTUM (Net Qty):
-                        {recent_trend}
-                        
-                        Based on this data, provide a professional, highly analytical response. 
-                        If the Net Inventory is highly positive, they are accumulating. If negative, they are dumping.
-                        Look at the recent 5 days to see if their behavior changed recently.
-                        Keep the response concise, formatted with bullet points, and act like a Wall Street advisor.
-                        
-                        User's specific question: {user_question if user_question else "Provide a general accumulation/distribution analysis and strategic advice."}
-                        """
-                        try:
-                            response = model.generate_content(prompt)
-                            st.write("---")
-                            st.markdown("### 🤖 AI Analyst Report")
-                            st.write(response.text)
-                        except Exception as e:
-                            st.error(f"AI Generation Failed: {e}")
+                user_question = st.text_input(
+                    "Ask a specific question, or leave blank for a general report:", 
+                    placeholder="E.g., Are they accumulating or distributing? What is their WACC?"
+                )
+                
+                if st.button("🧠 Generate Quant Report", type="primary"):
+                    
+                    prompt = f"""
+                    You are an elite quantitative analyst for the Nepal Stock Exchange (NEPSE). 
+                    I am providing you with the trading summary of {selected_col}.
+                    
+                    DATA SUMMARY:
+                    - Trading Days Logged: {total_days}
+                    - Current Holding Inventory (Net Qty): {current_inventory}
+                    - Estimated Weighted Average Cost (WACC): Rs {buy_wacc:.2f}
+                    
+                    RECENT 5-DAY MOMENTUM (Net Qty):
+                    {recent_trend}
+                    
+                    Based on this data, provide a professional, highly analytical response. 
+                    If the Net Inventory is highly positive, they are accumulating. If negative, they are dumping.
+                    Look at the recent 5 days to see if their behavior changed recently.
+                    Keep the response concise, formatted with bullet points, and act like a ruthless Wall Street advisor.
+                    
+                    User's specific question: {user_question if user_question else "Provide a general accumulation/distribution analysis and strategic advice."}
+                    """
 
+                    st.write("---")
+                    
+                    # 🚀 ROUTE 1: GEMINI ONLY
+                    if "🔵" in ai_engine:
+                        if model is None:
+                            st.error("Gemini API key is missing or invalid.")
+                        else:
+                            with st.spinner("🧠 Gemini is analyzing the order flow..."):
+                                try:
+                                    response = model.generate_content(prompt)
+                                    st.markdown("### 🔵 Gemini Analyst Report")
+                                    st.write(response.text)
+                                except Exception as e:
+                                    st.error(f"Gemini Generation Failed: {e}")
+
+                    # 🚀 ROUTE 2: CHATGPT ONLY
+                    elif "🟢" in ai_engine:
+                        if openai_client is None:
+                            st.error("OpenAI API key is missing or invalid.")
+                        else:
+                            with st.spinner("🧠 ChatGPT is analyzing the order flow..."):
+                                try:
+                                    response = openai_client.chat.completions.create(
+                                        model="gpt-4o",
+                                        messages=[
+                                            {"role": "system", "content": "You are a ruthless quantitative analyst."},
+                                            {"role": "user", "content": prompt}
+                                        ],
+                                        temperature=0.7
+                                    )
+                                    st.markdown("### 🟢 ChatGPT Analyst Report")
+                                    st.markdown(response.choices[0].message.content)
+                                except Exception as e:
+                                    st.error(f"ChatGPT Generation Failed: {e}")
+
+                    # 🚀 ROUTE 3: ULTIMATE CONSENSUS (BOTH SIDE-BY-SIDE)
+                    elif "🔥" in ai_engine:
+                        if model is None or openai_client is None:
+                            st.error("⚠️ You need BOTH Gemini and OpenAI API keys configured for Consensus mode.")
+                        else:
+                            st.markdown("### 🔥 AI Consensus Mode Initiated")
+                            col_gem, col_gpt = st.columns(2)
+                            
+                            with col_gem:
+                                st.markdown("#### 🔵 Gemini's Take")
+                                with st.spinner("Gemini analyzing..."):
+                                    try:
+                                        res_gem = model.generate_content(prompt)
+                                        st.write(res_gem.text)
+                                    except Exception as e:
+                                        st.error(f"Gemini Failed: {e}")
+                                        
+                            with col_gpt:
+                                st.markdown("#### 🟢 ChatGPT's Take")
+                                with st.spinner("ChatGPT analyzing..."):
+                                    try:
+                                        res_gpt = openai_client.chat.completions.create(
+                                            model="gpt-4o",
+                                            messages=[
+                                                {"role": "system", "content": "You are a ruthless quantitative analyst."},
+                                                {"role": "user", "content": prompt}
+                                            ],
+                                            temperature=0.7
+                                        )
+                                        st.markdown(res_gpt.choices[0].message.content)
+                                    except Exception as e:
+                                        st.error(f"ChatGPT Failed: {e}")
         # ------------------------------------------
         # TAB 6: COLLECTIVE TMS (Whole Market Analysis)
         # ------------------------------------------
