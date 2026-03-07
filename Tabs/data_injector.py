@@ -67,7 +67,7 @@ def run():
                 "Referer": "https://nepsealpha.com/floorsheet-history",
                 "X-Requested-With": "XMLHttpRequest", # <-- THIS IS THE MAGIC KEY
                 "Connection": "keep-alive"
-            }}
+            }
             
             # Determine which brokers to scan
             brokers_to_scan = [specific_broker] if fetch_mode == "Single Broker" else [str(i) for i in range(1, 100)]
