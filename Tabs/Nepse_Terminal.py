@@ -48,6 +48,7 @@ def fetch_and_clean_data(stock, broker):
     df["Sell_Amount"] = pd.to_numeric(df.get("s_amt", 0))
     
     df["Net_Qty"] = df["Buy_Qty"] - df["Sell_Qty"]
+    df["Net_Amount"] = df["Buy_Amount"] - df["Sell_Amount"]
     df["Total_Vol"] = df["Buy_Qty"] + df["Sell_Qty"]
     df["Daily_VWAP"] = np.where(df["Total_Vol"] > 0, (df["Buy_Amount"] + df["Sell_Amount"]) / df["Total_Vol"], 0)
     
