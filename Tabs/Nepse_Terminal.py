@@ -542,24 +542,52 @@ def run():
                 st.write("---")
                 
                 # --- VISUALIZING THE SQUEEZE ---
-                st.markdown("### 🧲 Supply Absorption (Top 5 vs Top 5)")
-                st.caption("Are the top buyers sucking up more shares than the top sellers are dumping?")
+                # --- THE DARK POOL & SUPPLY SQUEEZE ---
+                st.markdown("### 🧲 The 'Dark Pool' Float Squeeze")
+                st.caption("Enter the Total Public Float (tradable shares) of the company to see how much supply these top brokers have locked up.")
                 
                 t5_buy = top_buyers.head(5)["Net_Qty"].sum() if not top_buyers.empty else 0
                 t5_sell = abs(top_sellers.head(5)["Net_Qty"].sum()) if not top_sellers.empty else 0
                 
-                fig_vs = go.Figure(data=[
-                    go.Bar(name='Top 5 Buyers Absorbed', x=['Top 5 Impact'], y=[t5_buy], marker_color='#27ae60'),
-                    go.Bar(name='Top 5 Sellers Dumped', x=['Top 5 Impact'], y=[t5_sell], marker_color='#e74c3c')
-                ])
-                fig_vs.update_layout(barmode='group', height=400)
-                st.plotly_chart(fig_vs, use_container_width=True)
+                public_float = st.number_input("Total Public Float (Number of Shares):", min_value=0, value=0, step=100000)
                 
-                # --- ACTIONABLE SIGNAL ---
-                st.markdown("### 🧠 Automated System Conclusion")
-                if t5_buy > (t5_sell * 1.2):
-                    st.success(f"**STRONG BUY SIGNAL:** The top 5 accumulators are aggressively absorbing the float for {stock_symbol}. Supply is drying up.")
-                elif t5_sell > (t5_buy * 1.2):
-                    st.error(f"**DISTRIBUTION WARNING:** Major brokers are unloading {stock_symbol} onto retail. Wait for the selling pressure to exhaust.")
-                else:
-                    st.info(f"**NEUTRAL TUG-OF-WAR:** Buyers and sellers are currently deadlocked on {stock_symbol}. Look at the Macro VWAP for support levels.")
+                col_sq1, col_sq2 = st.columns(2)
+                
+                with col_sq1:
+                    fig_vs = go.Figure(data=[
+                        go.Bar(name='Top 5 Buyers Absorbed', x=['Top 5 Impact'], y=[t5_buy], marker_color='#27ae60'),
+                        go.Bar(name='Top 5 Sellers Dumped', x=['Top 5 Impact'], y=[t5_sell], marker_color='#e74c3c')
+                    ])
+                    fig_vs.update_layout(barmode='group', height=350, margin=dict(t=30, b=0))
+                    st.plotly_chart(fig_vs, use_container_width=True)
+
+                with col_sq2:
+                    if public_float > 0:
+                        locked_pct = (t5_buy / public_float) * 100
+                        
+                        fig_float = go.Figure(go.Indicator(
+                            mode = "gauge+number",
+                            value = locked_pct,
+                            number = {'suffix': "%"},
+                            title = {'text': "Public Float Locked by Top 5 Brokers"},
+                            gauge = {
+                                'axis': {'range': [None, 100]},
+                                'bar': {'color': "rgba(39, 174, 96, 0.8)"},
+                                'steps' : [
+                                    {'range': [0, 10], 'color': "rgba(200, 200, 200, 0.2)"},
+                                    {'range': [10, 30], 'color': "rgba(241, 196, 15, 0.3)"},
+                                    {'range': [30, 100], 'color': "rgba(192, 57, 43, 0.4)"}],
+                                'threshold' : {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 25}
+                            }
+                        ))
+                        fig_float.update_layout(height=350, margin=dict(t=50, b=0))
+                        st.plotly_chart(fig_float, use_container_width=True)
+                        
+                        if locked_pct > 25:
+                            st.error(f"🚨 **MASSIVE SUPPLY SQUEEZE DETECTED!** The top 5 brokers alone have hoarded {locked_pct:.1f}% of the entire tradable supply. A massive price markup is highly probable.")
+                        elif locked_pct > 10:
+                            st.warning(f"⚠️ **FLOAT SHRINKING:** Smart money has locked up {locked_pct:.1f}% of the supply. Liquidity is drying up.")
+                        else:
+                            st.info("Normal liquidity levels. No major squeeze detected yet.")
+                    else:
+                        st.info("👈 Enter the public float to unlock the supply squeeze gauge.")
