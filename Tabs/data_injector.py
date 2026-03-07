@@ -4,6 +4,7 @@ import pandas as pd
 from pymongo import MongoClient
 import requests
 import time
+import cloudscraper
 
 # --- DATABASE CONNECTION ---
 @st.cache_resource
@@ -235,13 +236,37 @@ def run():
                     st.markdown("### 📦 Raw Response Body")
                     
                     try:
-                        # If it is valid JSON, it will format it nicely
+                    # 1. Initialize the Cloudflare Bypass Engine
+                    scraper = cloudscraper.create_scraper(
+                        browser={
+                            'browser': 'chrome',
+                            'platform': 'windows',
+                            'desktop': True
+                        }
+                    )
+                    
+                    # 2. Fire the request using the scraper instead of requests
+                    response = scraper.get(test_url, headers=headers, timeout=15)
+
+                    # 1. Show Status Code
+                    if response.status_code == 200:
+                        st.success(f"Status Code: {response.status_code} (OK - Cloudflare Bypassed!)")
+                    else:
+                        st.error(f"Status Code: {response.status_code} (Blocked/Failed)")
+
+                    # 2. Show Headers
+                    st.markdown("### 📡 Response Headers")
+                    st.json(dict(response.headers))
+
+                    # 3. Show the RAW Body
+                    st.markdown("### 📦 Raw Response Body")
+                    
+                    try:
                         json_data = response.json()
-                        st.success("✅ Valid JSON payload received!")
+                        st.success("✅ Valid JSON payload received! The Matrix has been breached.")
                         st.json(json_data)
                     except json.JSONDecodeError:
-                        # IF IT FAILS TO PARSE JSON, THIS WILL REVEAL THE HTML BLOCK PAGE
-                        st.error("🛑 Response is NOT valid JSON. The server returned raw text/HTML.")
+                        st.error("🛑 Response is NOT valid JSON.")
                         st.text_area("Unmodified Text Output:", response.text, height=400)
 
                 except Exception as e:
