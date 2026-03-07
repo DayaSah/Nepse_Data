@@ -52,13 +52,44 @@ def fetch_and_clean_data(collection_name):
     df["Total_Vol"] = df["Buy_Qty"] + df["Sell_Qty"]
     df["Daily_VWAP"] = np.where(df["Total_Vol"] > 0, (df["Buy_Amount"] + df["Sell_Amount"]) / df["Total_Vol"], 0)
     
-    # Needs to be sorted by date for rolling averages and cumsum to work perfectly
     df = df.sort_values(by="Date").reset_index(drop=True)
-    
     df["Cum_Net_Qty"] = df["Net_Qty"].cumsum()
     df["Avg_30D_Vol"] = df["Total_Vol"].rolling(window=30, min_periods=1).mean()
     
     return df
+
+@st.cache_data(ttl=600)
+def fetch_collective_data(stock_symbol, valid_collections):
+    """Aggregates data for a stock across ALL brokers in the database."""
+    if db is None: return pd.DataFrame()
+    target_cols = [c for c in valid_collections if c.split("_")[0] == stock_symbol]
+    
+    all_dfs = []
+    for col in target_cols:
+        cursor = db[col].find({}, {"_id": 0})
+        df = pd.DataFrame(list(cursor))
+        if not df.empty:
+            all_dfs.append(df)
+            
+    if not all_dfs: return pd.DataFrame()
+        
+    combined = pd.concat(all_dfs, ignore_index=True)
+    combined["Date"] = pd.to_datetime(combined["date"], errors='coerce')
+    combined["Buy_Qty"] = pd.to_numeric(combined.get("b_qty", 0))
+    combined["Sell_Qty"] = pd.to_numeric(combined.get("s_qty", 0))
+    combined["Buy_Amount"] = pd.to_numeric(combined.get("b_amt", 0))
+    combined["Sell_Amount"] = pd.to_numeric(combined.get("s_amt", 0))
+    
+    agg_df = combined.groupby("Date", as_index=False).agg({
+        "Buy_Qty": "sum", "Sell_Qty": "sum", "Buy_Amount": "sum", "Sell_Amount": "sum"
+    }).sort_values(by="Date").reset_index(drop=True)
+    
+    agg_df["Net_Qty"] = agg_df["Buy_Qty"] - agg_df["Sell_Qty"]
+    agg_df["Total_Vol"] = agg_df["Buy_Qty"] + agg_df["Sell_Qty"]
+    agg_df["Daily_VWAP"] = np.where(agg_df["Total_Vol"] > 0, (agg_df["Buy_Amount"] + agg_df["Sell_Amount"]) / agg_df["Total_Vol"], 0)
+    agg_df["Cum_Net_Qty"] = agg_df["Net_Qty"].cumsum()
+    
+    return agg_df
 
 # ==========================================
 # 🚀 MAIN APP EXECUTOR
@@ -81,6 +112,7 @@ def run():
     selected_col = st.selectbox("Select Target (Format: STOCK_BROKER):", valid_collections)
 
     if selected_col:
+        stock_symbol = selected_col.split("_")[0]
         raw_df = fetch_and_clean_data(selected_col)
         
         if raw_df.empty:
@@ -94,18 +126,18 @@ def run():
         if len(date_range) == 2:
             mask = (raw_df["Date"].dt.date >= date_range[0]) & (raw_df["Date"].dt.date <= date_range[1])
             df = raw_df.loc[mask].copy().reset_index(drop=True)
-            # Recalculate cum_net_qty for the specific zoomed-in range
             df["Cum_Net_Qty"] = df["Net_Qty"].cumsum()
         else:
             df = raw_df.copy()
 
-        # --- SETUP 5 MEGA TABS ---
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        # --- SETUP 6 MEGA TABS ---
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "📂 Ledger & Matrix", 
             "🚀 Advanced Metrics", 
             "📊 Optics & Trends", 
             "🐳 Volume & Whales", 
-            "🤖 AI Advisor"
+            "🤖 AI Advisor",
+            "🌐 Collective TMS (Market Macro)"
         ])
         
         # ------------------------------------------
@@ -318,3 +350,53 @@ def run():
                             st.write(response.text)
                         except Exception as e:
                             st.error(f"AI Generation Failed: {e}")
+
+        # ------------------------------------------
+        # TAB 6: COLLECTIVE TMS (Whole Market Analysis)
+        # ------------------------------------------
+        with tab6:
+            st.subheader(f"🌐 Macro Market View: {stock_symbol}")
+            st.markdown(f"Aggregating all TMS broker data to show true market volume and macro support/resistance for **{stock_symbol}**.")
+            
+            agg_df = fetch_collective_data(stock_symbol, valid_collections)
+            
+            if agg_df.empty:
+                st.warning("Could not aggregate market data for this stock.")
+            else:
+                # Filter aggregate data using the same global date range
+                if len(date_range) == 2:
+                    mask = (agg_df["Date"].dt.date >= date_range[0]) & (agg_df["Date"].dt.date <= date_range[1])
+                    agg_df = agg_df.loc[mask].copy().reset_index(drop=True)
+                
+                colA, colB = st.columns(2)
+                
+                with colA:
+                    st.markdown("### 📈 Total Market Volume Trend")
+                    fig_agg1 = go.Figure()
+                    fig_agg1.add_trace(go.Bar(x=agg_df["Date"], y=agg_df["Total_Vol"], name="Market Vol", marker_color="#8e44ad"))
+                    fig_agg1.update_layout(height=400, hovermode="x unified", margin=dict(t=30, b=0))
+                    st.plotly_chart(fig_agg1, use_container_width=True)
+
+                with colB:
+                    st.markdown("### 🌪️ Market Volatility Bubble")
+                    st.caption("X=Date | Y=Market VWAP | Size=Total Market Volume")
+                    fig_agg2 = px.scatter(agg_df, x="Date", y="Daily_VWAP", size=agg_df["Total_Vol"].abs(), color="Total_Vol", color_continuous_scale="Plasma")
+                    fig_agg2.update_traces(marker=dict(line=dict(width=1, color='DarkSlateGrey')), selector=dict(mode='markers'))
+                    fig_agg2.update_layout(height=400, margin=dict(t=30, b=0))
+                    st.plotly_chart(fig_agg2, use_container_width=True)
+
+                st.write("---")
+                st.markdown("### 🧱 True Market Volume Profile (Macro Support/Resistance)")
+                vp_agg = agg_df[agg_df["Daily_VWAP"] > 0].copy()
+                if not vp_agg.empty and vp_agg["Daily_VWAP"].nunique() > 1:
+                    bins = np.linspace(vp_agg["Daily_VWAP"].min(), vp_agg["Daily_VWAP"].max(), 20)
+                    vp_agg['Price_Zone'] = pd.cut(vp_agg['Daily_VWAP'], bins=bins)
+                    profile_agg = vp_agg.groupby('Price_Zone', observed=False)['Total_Vol'].sum().reset_index()
+                    profile_agg['Price_Level'] = profile_agg['Price_Zone'].apply(lambda x: f"Rs {int(x.mid)}" if pd.notnull(x) else "Unknown")
+                    
+                    fig_agg3 = go.Figure()
+                    fig_agg3.add_trace(go.Bar(y=profile_agg['Price_Level'], x=profile_agg['Total_Vol'], orientation='h', marker_color='#2c3e50'))
+                    fig_agg3.update_layout(yaxis=dict(autorange="reversed"), height=500, hovermode="y unified", margin=dict(t=30, b=0))
+                    st.plotly_chart(fig_agg3, use_container_width=True)
+                else:
+                    st.info("Not enough price variation to plot Macro Volume Profile.")
