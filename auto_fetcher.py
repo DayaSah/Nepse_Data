@@ -1,24 +1,48 @@
 import asyncio
 import os
 import random
+import urllib.request
+import urllib.parse
 from urllib.parse import urlparse, parse_qs
 from playwright.async_api import async_playwright
 from pymongo import MongoClient
 
-# --- CONFIGURATION ---
-# It now securely pulls the URI from GitHub Secrets instead of hardcoding it!
+# --- CONFIGURATION & SECRETS ---
 MONGO_URI = os.getenv("MONGO_URI") 
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# --- GLOBAL TRACKERS FOR FINAL REPORT ---
+fetch_report = {
+    "stocks_updated": set(),
+    "whale_alerts": 0,
+    "errors": 0
+}
+
+# --- TELEGRAM ALERT FUNCTION ---
+def send_telegram_alert(message):
+    """Sends a push notification to your Telegram."""
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("⚠️ Telegram secrets not found. Skipping alert...")
+        return
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        data = urllib.parse.urlencode({'chat_id': TELEGRAM_CHAT_ID, 'text': message}).encode('utf-8')
+        urllib.request.urlopen(url, data=data, timeout=5)
+    except Exception as e:
+        print(f"Failed to send Telegram alert: {e}")
+
+# --- MONGODB SETUP ---
 def get_db():
     try:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=15000)
         db = client["StockHoldingByTMS"]
-        
         # V2 OPTIMIZATION: Ensure the high-speed index exists on startup
         db["market_trades"].create_index([("stock", 1), ("date", -1), ("broker", 1)])
         return db
     except Exception as e:
         print(f"🔴 CONNECTION ERROR: {e}")
+        send_telegram_alert(f"🚨 DATABASE ERROR: Cannot connect to MongoDB. Error: {e}")
         return None
 
 db = get_db()
@@ -31,7 +55,6 @@ def get_tracked_stocks():
     """Scans the master market_trades collection to find which stock symbols are actively tracked."""
     if db is None: return []
     try:
-        # V2 OPTIMIZATION: Use distinct() to instantly get all unique stocks from the master collection
         stocks = db["market_trades"].distinct("stock")
         return list(stocks)
     except Exception as e:
@@ -45,6 +68,7 @@ def safe_num(val, is_float=False):
         return float(clean_val) if is_float else int(float(clean_val))
     except: return 0.0 if is_float else 0
 
+# --- THE NETWORK INTERCEPTOR & WHALE RADAR ---
 async def global_network_radar(response):
     if "floorsheet-history/filter" in response.url and response.status == 200:
         try:
@@ -60,34 +84,48 @@ async def global_network_radar(response):
             
             if records:
                 market_trades = db["market_trades"]
+                daily_net_qty = 0 # Track accumulation for Whale Alert
+                
                 for r in records:
-                    # V2 OPTIMIZATION: Update the Master Collection with stock and broker fields
+                    b_qty = safe_num(r.get("b_qty"))
+                    s_qty = safe_num(r.get("s_qty"))
+                    daily_net_qty += (b_qty - s_qty)
+                    
                     market_trades.update_one(
-                        {
-                            "stock": symbol, 
-                            "broker": str(broker), 
-                            "date": r.get("date")
-                        },
+                        {"stock": symbol, "broker": str(broker), "date": r.get("date")},
                         {"$set": {
-                            "b_qty": safe_num(r.get("b_qty")),
-                            "s_qty": safe_num(r.get("s_qty")),
-                            "b_amt": safe_num(r.get("b_amt"), True),
-                            "s_amt": safe_num(r.get("s_amt"), True)
+                            "b_qty": b_qty, "s_qty": s_qty,
+                            "b_amt": safe_num(r.get("b_amt"), True), "s_amt": safe_num(r.get("s_amt"), True)
                         }},
-                        upsert=True # Updates existing dates, adds new ones! No duplicates!
+                        upsert=True
                     )
+                
                 print(f"   🎯 [UPDATED] {symbol} | Broker {broker}: {len(records)} records.")
-        except Exception: pass
+                fetch_report["stocks_updated"].add(symbol)
+                
+                # 🐋 WHALE ALERT SYSTEM 🐋
+                if daily_net_qty > 10000:
+                    send_telegram_alert(f"🐋 WHALE BUY ALERT!\nBroker {broker} accumulated +{daily_net_qty:,} shares of {symbol}!")
+                    fetch_report["whale_alerts"] += 1
+                elif daily_net_qty < -10000:
+                    send_telegram_alert(f"🩸 DUMP ALERT!\nBroker {broker} unloaded {daily_net_qty:,} shares of {symbol}!")
+                    fetch_report["whale_alerts"] += 1
+                    
+        except Exception as e: 
+            fetch_report["errors"] += 1
 
+# --- THE MAIN ORCHESTRATOR ---
 async def run_automation():
     stocks_to_update = get_tracked_stocks()
     if not stocks_to_update:
-        print("⚠️ No existing stocks found in MongoDB. You must run the initial vacuum first.")
+        msg = "⚠️ No existing stocks found in MongoDB. Database is empty."
+        print(msg)
+        send_telegram_alert(msg)
         return
 
     print("="*40)
-    print(f"☁️ NEPSE GHOST FETCHER (V2 Master Architecture)")
-    print(f"🔄 Updating stocks: {', '.join(stocks_to_update)}")
+    print(f"☁️ NEPSE GHOST FETCHER STARTING...")
+    print(f"🔄 Targets: {len(stocks_to_update)} stocks")
     print("="*40)
 
     async with async_playwright() as p:
@@ -108,12 +146,14 @@ async def run_automation():
             await page.goto("https://nepsealpha.com/floorsheet-history", timeout=60000)
             await asyncio.sleep(10) 
         except Exception as e:
-            print(f"❌ Handshake failed: {e}")
+            error_msg = f"❌ Handshake failed (Cloudflare block or site down). Error: {str(e)[:100]}"
+            print(error_msg)
+            send_telegram_alert(f"🚨 SCRAPER CRASHED: {error_msg}")
             await browser.close()
             return
 
         for stock in stocks_to_update:
-            print(f"\n📈 Starting Fetch for: {stock}")
+            print(f"\n📈 Scanning Market Data for: {stock}")
             for b_id in ACTIVE_BROKERS:
                 api_url = f"https://nepsealpha.com/floorsheet-history/filter?fsk=1772847797646&symbol={stock}&broker={b_id}&dateRangeType=1month"
                 
@@ -122,10 +162,27 @@ async def run_automation():
                     await asyncio.sleep(random.uniform(3, 7)) 
                 except Exception:
                     print(f"⚠️ Broker {b_id} timed out. Skipping...")
+                    fetch_report["errors"] += 1
                     continue
 
-        print(f"\n🏁 ALL STOCKS SUCCESSFULLY UPDATED IN MONGODB.")
         await browser.close()
+
+    # --- SEND FINAL TELEGRAM BRIEFING ---
+    success_count = len(fetch_report["stocks_updated"])
+    
+    if success_count > 0:
+        final_msg = (
+            f"✅ **NEPSE Update Complete!**\n\n"
+            f"📈 Stocks Successfully Passed: {success_count} / {len(stocks_to_update)}\n"
+            f"🐋 Whale Alerts Fired: {fetch_report['whale_alerts']}\n"
+            f"⚠️ Minor Errors/Timeouts: {fetch_report['errors']}\n\n"
+            f"Database successfully updated. 🌌"
+        )
+    else:
+        final_msg = "❌ **NEPSE Update Failed.** The scraper ran, but ZERO records were updated. NepseAlpha may have changed their API structure or blocked the IP entirely."
+
+    print(f"\n🏁 SCRIPT FINISHED. Sending briefing to Telegram...")
+    send_telegram_alert(final_msg)
 
 if __name__ == "__main__":
     asyncio.run(run_automation())
