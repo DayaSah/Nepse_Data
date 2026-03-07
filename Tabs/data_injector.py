@@ -59,12 +59,15 @@ def run():
                 
             db = client["StockHoldingByTMS"]
             
-            # Setup headers to look like a real human browser
+            # Setup headers to look EXACTLY like a real human browser doing an AJAX request
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "application/json, text/plain, */*",
-                "Referer": "https://nepsealpha.com/"
-            }
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://nepsealpha.com/floorsheet-history",
+                "X-Requested-With": "XMLHttpRequest", # <-- THIS IS THE MAGIC KEY
+                "Connection": "keep-alive"
+            }}
             
             # Determine which brokers to scan
             brokers_to_scan = [specific_broker] if fetch_mode == "Single Broker" else [str(i) for i in range(1, 100)]
