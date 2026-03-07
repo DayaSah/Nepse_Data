@@ -412,7 +412,7 @@ def run():
                 st.warning("Could not aggregate market data for this stock.")
             else:
                 # Filter aggregate data using the same global date range
-                if len(date_range) == 2:
+                
                     mask = (race_df["Date"].dt.date >= start_date) & (race_df["Date"].dt.date <= end_date)
                     race_df = race_df.loc[mask].copy()
                 
