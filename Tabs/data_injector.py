@@ -142,59 +142,71 @@ def run():
             st.markdown(f"- **Existing Records Updated:** {total_updated}")
 
     with tab2:
-        st.header("Manual TMS File Upload")
-        st.markdown("Use this if the API Auto-Fetcher is blocked by Cloudflare.")
+        st.header("📂 Manual JSON Payload Injector")
+        st.markdown("Bypass Cloudflare entirely by pasting the raw JSON response from your browser.")
         
         col1, col2 = st.columns(2)
         with col1:
-            manual_stock = st.text_input("Stock Symbol (e.g., NHPC):", key="man_stock").upper().strip()
+            manual_stock = st.text_input("Stock Symbol (e.g., ADBL):", key="manual_stock").upper().strip()
         with col2:
-            manual_tms = st.text_input("Broker TMS ID (e.g., 58):", key="man_tms").strip()
+            manual_broker = st.text_input("Broker ID (e.g., 58):", key="manual_broker").strip()
             
-        uploaded_file = st.file_uploader("Upload Data File (.txt or .json format)", type=["txt", "json"])
+        json_payload = st.text_area("Paste the Raw JSON payload here:", height=300, placeholder='{"data": [{"date": "2024-02-15", "b_qty": "100", ...}]}')
         
-        if st.button("🚀 Inject Manual Data"):
-            if not manual_stock or not manual_tms:
-                st.error("❌ Please enter both Stock Symbol and TMS ID.")
-            elif uploaded_file is None:
-                st.error("❌ Please upload a data file.")
-            elif client is None:
+        if st.button("💉 Inject Payload into Quantum DB"):
+            if not manual_stock or not manual_broker:
+                st.error("❌ Stock Symbol and Broker ID are required.")
+                return
+            if not json_payload:
+                st.error("❌ Please paste the JSON payload.")
+                return
+            if not client:
                 st.error("❌ MongoDB connection is not active.")
-            else:
-                try:
-                    file_content = uploaded_file.read().decode("utf-8")
-                    json_data = json.loads(file_content)
-                    records = json_data.get("data", [])
-                    
-                    if not records:
-                        st.error("No valid 'data' array found in the file.")
-                    else:
-                        db = client["StockHoldingByTMS"]
-                        collection_name = f"{manual_stock}_{manual_tms}"
-                        collection = db[collection_name]
+                return
+                
+            db = client["StockHoldingByTMS"]
+            collection_name = f"{manual_stock}_{manual_broker}"
+            collection = db[collection_name]
+            
+            try:
+                # Parse the pasted JSON
+                data = json.loads(json_payload)
+                
+                # Check if it has the 'data' key (standard NepseAlpha format)
+                records = data.get("data", [])
+                
+                if not records:
+                    st.warning("⚠️ The JSON payload seems valid but contains no 'data' records.")
+                    return
+                
+                total_inserted = 0
+                total_updated = 0
+                
+                for record in records:
+                    date_val = record.get("date")
+                    if date_val:
+                        query = {"date": date_val}
+                        new_values = {"$set": {
+                            "b_qty": int(record.get("b_qty", 0)),
+                            "s_qty": int(record.get("s_qty", 0)),
+                            "b_amt": float(record.get("b_amt", 0)),
+                            "s_amt": float(record.get("s_amt", 0))
+                        }}
                         
-                        prog = st.progress(0)
-                        u_count, i_count = 0, 0
-                        
-                        for i, record in enumerate(records):
-                            date_val = record.get("date")
-                            if date_val:
-                                query = {"date": date_val}
-                                new_values = {"$set": {
-                                    "b_qty": int(record.get("b_qty", 0)),
-                                    "s_qty": int(record.get("s_qty", 0)),
-                                    "b_amt": float(record.get("b_amt", 0)),
-                                    "s_amt": float(record.get("s_amt", 0))
-                                }}
-                                result = collection.update_one(query, new_values, upsert=True)
-                                if result.matched_count > 0: u_count += 1
-                                else: i_count += 1
-                            prog.progress((i + 1) / len(records))
+                        result = collection.update_one(query, new_values, upsert=True)
+                        if result.matched_count > 0:
+                            total_updated += 1
+                        else:
+                            total_inserted += 1
                             
-                        st.success(f"✅ Injection Complete for **{collection_name}**! Inserted: {i_count}, Updated: {u_count}")
-                except Exception as e:
-                    st.error(f"❌ An error occurred: {e}")
-
+                st.success(f"✅ Injection Successful for {manual_stock} (Broker {manual_broker})!")
+                st.markdown(f"- **New Records Inserted:** {total_inserted}")
+                st.markdown(f"- **Existing Records Updated:** {total_updated}")
+                
+            except json.JSONDecodeError:
+                st.error("🛑 Invalid JSON format. Make sure you pasted the exact raw JSON from the browser.")
+            except Exception as e:
+                st.error(f"An error occurred during injection: {e}")
     with tab3:
         st.header("🧪 API Diagnostics & Cookie Hijacker")
         st.markdown("If Cloudflare blocks standard requests, we must inject a verified human session cookie.")
