@@ -23,7 +23,9 @@ def run():
         try:
             Stock_Hold.run()
         except Exception as e:
-            st.warning("⚠️ Module 'Stock_Hold' is currently under construction or missing.")
+            # THIS WILL NOW SHOW US THE REAL ERROR!
+            st.error(f"🛑 CRITICAL SYSTEM FAILURE in Stock_Hold: {str(e)}")
+            st.exception(e) # This prints the exact line number where it broke
             
     with tab2:
         st.info("The Trade Flow Matrix will be implemented in Step 2.")
