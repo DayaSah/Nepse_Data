@@ -441,7 +441,7 @@ def run():
                     final_standings = race_df.groupby("Broker")["Cum_Net_Qty"].last().sort_values(ascending=False)
                     
                     # Smart Filter Toggle
-                    show_top_only = st.checkbox("🎯 Show Top 5 Accumulators & Top 5 Dumpers Only (Remove Noise)")
+                    show_top_only = st.checkbox("🎯 Show Top 5 Accumulators & Top 5 Dumpers Only (Remove Noise)", value=True)
                     
                     if show_top_only:
                         top_brokers = list(final_standings.head(5).index) + list(final_standings.tail(5).index)
@@ -453,7 +453,8 @@ def run():
                     fig_race = px.line(
                         plot_df, x="Date", y="Cum_Net_Qty", color="Broker", 
                         hover_data=["Net_Qty"],
-                        color_discrete_sequence=px.colors.qualitative.Alphabet
+                        color_discrete_sequence=px.colors.qualitative.Alphabet,
+                        render_mode="webgl"
                     )
                     fig_race.update_layout(height=650, hovermode="closest", yaxis_title="Cumulative Net Quantity")
                     # Make lines slightly transparent to handle the noise, unless hovered
