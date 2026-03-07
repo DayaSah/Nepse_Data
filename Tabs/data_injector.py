@@ -196,17 +196,20 @@ def run():
                     st.error(f"❌ An error occurred: {e}")
 
     with tab3:
-        st.header("🧪 API Diagnostics & Raw Tester")
-        st.markdown("Paste the exact Request URL from your browser's Network tab to see exactly what the server is returning. We will view the unmodified response.")
+        st.header("🧪 API Diagnostics & Cookie Hijacker")
+        st.markdown("If Cloudflare blocks standard requests, we must inject a verified human session cookie.")
 
-        # User inputs the exact URL they copied from the browser
         test_url = st.text_input("Paste Raw API URL here:", placeholder="https://nepsealpha.com/floorsheet-history/filter?fsk=...")
+        
+        st.markdown("---")
+        st.markdown("**How to get the Cookie:**\n1. In the Network tab, click the API request.\n2. Go to **Request Headers** (scroll down).\n3. Find the line that says `cookie: ...`\n4. Right-click, copy the *value*, and paste it below.")
+        
+        cookie_string = st.text_area("Paste Cookie String here (Optional but recommended):", height=100)
 
         if st.button("🔍 Run Diagnostic Fetch"):
             if not test_url:
                 st.warning("⚠️ Please paste a URL first.")
             else:
-                # The exact headers we are currently using
                 headers = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     "Accept": "application/json, text/plain, */*",
@@ -215,33 +218,22 @@ def run():
                     "X-Requested-With": "XMLHttpRequest",
                     "Connection": "keep-alive"
                 }
+                
+                # Inject the hijacked cookie if provided
+                if cookie_string:
+                    headers["Cookie"] = cookie_string.strip()
 
                 st.info("Transmission sent. Waiting for server response...")
                 
                 try:
-                    # 1. Initialize the Cloudflare Bypass Engine
-                    scraper = cloudscraper.create_scraper(
-                        browser={
-                            'browser': 'chrome',
-                            'platform': 'windows',
-                            'desktop': True
-                        }
-                    )
-                    
-                    # 2. Fire the request using the scraper instead of requests
-                    response = scraper.get(test_url, headers=headers, timeout=15)
+                    # We can use standard requests here since the cookie acts as our VIP pass
+                    response = requests.get(test_url, headers=headers, timeout=15)
 
-                    # 1. Show Status Code
                     if response.status_code == 200:
                         st.success(f"Status Code: {response.status_code} (OK - Cloudflare Bypassed!)")
                     else:
                         st.error(f"Status Code: {response.status_code} (Blocked/Failed)")
 
-                    # 2. Show Headers
-                    st.markdown("### 📡 Response Headers")
-                    st.json(dict(response.headers))
-
-                    # 3. Show the RAW Body
                     st.markdown("### 📦 Raw Response Body")
                     
                     try:
