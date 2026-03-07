@@ -411,10 +411,9 @@ def run():
             if agg_df.empty:
                 st.warning("Could not aggregate market data for this stock.")
             else:
-                # Filter aggregate data using the same global date range
-                
-                    mask = (race_df["Date"].dt.date >= start_date) & (race_df["Date"].dt.date <= end_date)
-                    race_df = race_df.loc[mask].copy()
+                # Filter aggregate data using the new global date variables
+                mask = (agg_df["Date"].dt.date >= start_date) & (agg_df["Date"].dt.date <= end_date)
+                agg_df = agg_df.loc[mask].copy().reset_index(drop=True)
                 
                 colA, colB = st.columns(2)
                 
@@ -457,9 +456,11 @@ def run():
                 race_df = fetch_broker_race_data(stock_symbol, valid_collections)
                 
                 if not race_df.empty:
-                    if len(date_range) == 2:
-                        mask = (agg_df["Date"].dt.date >= start_date) & (agg_df["Date"].dt.date <= end_date)
-                        agg_df = agg_df.loc[mask].copy().reset_index(drop=True)
+                    # Safely apply the new start_date and end_date to race_df
+                    mask = (race_df["Date"].dt.date >= start_date) & (race_df["Date"].dt.date <= end_date)
+                    race_df = race_df.loc[mask].copy()
+                    
+                    # Get the final standing of each broker to find the top accumulators/dumpers
                     
                     # Get the final standing of each broker to find the top accumulators/dumpers
                     final_standings = race_df.groupby("Broker")["Cum_Net_Qty"].last().sort_values(ascending=False)
