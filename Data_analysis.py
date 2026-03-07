@@ -28,7 +28,8 @@ from Tabs import (
     data_injector, 
     stock_graph, 
     predictor, 
-    Nepse_Terminal
+    Nepse_Terminal,
+    telegram
 )
 
 # --- 2. AUTHENTICATION SYSTEM ---
@@ -87,7 +88,8 @@ if check_credentials():
         "📉 Technical Terminal": stock_graph,
         "🔮 AI Predictor": predictor,
         "💉 Data Injector": data_injector,
-        "📡 Nepse Terminal": Nepse_Terminal
+        "📡 Nepse Terminal": Nepse_Terminal,
+        "📱 Telegram Hub": telegram
     }
     
     selection = st.sidebar.radio("Select Interface Layer:", list(tabs.keys()))
