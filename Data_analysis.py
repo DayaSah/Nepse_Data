@@ -55,7 +55,7 @@ if check_credentials():
     tabs = {
         "📊 Dashboard": dashboard,
         "📈 Stock Analysis": stock_analysis,
-        "📘 TMS Ledger Analysis": tms_analysis,
+        "📘 TMS Data Analysis": tms_analysis,
         "💉 Data Injector": data_injector,
         "📉 Stock Graphing": stock_graph,
         "🔮 AI Predictor": predictor
