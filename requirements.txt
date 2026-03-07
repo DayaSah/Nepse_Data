@@ -2,3 +2,4 @@ streamlit
 pandas
 pymongo
 dnspython
+plotly
