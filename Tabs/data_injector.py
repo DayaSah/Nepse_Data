@@ -86,7 +86,7 @@ def run():
                 
                 # Generate dynamic fsk timestamp
                 fsk = int(time.time() * 1000)
-                url = f"https://nepsealpha.com/floorsheet-history/filter?fsk={fsk}&symbol={fetch_stock}&broker={broker_id}&dateRangeType={fetch_range}"
+                url = f"https://nepsealpha.com/floorsheet-history/filter?fsk=1772847797646&symbol={fetch_stock}&broker={broker_id}&dateRangeType={fetch_range}"
                 
                 try:
                     response = requests.get(url, headers=headers, timeout=10)
