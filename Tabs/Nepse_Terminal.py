@@ -30,16 +30,16 @@ except Exception as e:
     model = None
 
 # --- 3. DATA FETCHING & PREPARATION ---
+# --- 3. DATA FETCHING & PREPARATION (V2 OPTIMIZED) ---
 @st.cache_data(ttl=600)
-def fetch_and_clean_data(collection_name):
-    if db is None:
-        return pd.DataFrame()
+def fetch_and_clean_data(stock, broker):
+    """Fetches a single broker's data for a stock from the master collection."""
+    if db is None: return pd.DataFrame()
         
-    cursor = db[collection_name].find({}, {"_id": 0})
+    cursor = db["market_trades"].find({"stock": stock, "broker": str(broker)}, {"_id": 0})
     df = pd.DataFrame(list(cursor))
     
-    if df.empty:
-        return df
+    if df.empty: return df
         
     df["Date"] = pd.to_datetime(df["date"], errors='coerce')
     df["Buy_Qty"] = pd.to_numeric(df.get("b_qty", 0))
@@ -48,71 +48,64 @@ def fetch_and_clean_data(collection_name):
     df["Sell_Amount"] = pd.to_numeric(df.get("s_amt", 0))
     
     df["Net_Qty"] = df["Buy_Qty"] - df["Sell_Qty"]
-    df["Net_Amount"] = df["Buy_Amount"] - df["Sell_Amount"]
     df["Total_Vol"] = df["Buy_Qty"] + df["Sell_Qty"]
     df["Daily_VWAP"] = np.where(df["Total_Vol"] > 0, (df["Buy_Amount"] + df["Sell_Amount"]) / df["Total_Vol"], 0)
     
     df = df.sort_values(by="Date").reset_index(drop=True)
     df["Cum_Net_Qty"] = df["Net_Qty"].cumsum()
     df["Avg_30D_Vol"] = df["Total_Vol"].rolling(window=30, min_periods=1).mean()
-    
     return df
 
+@st.cache_data(ttl=600)
+def fetch_broker_race_data(stock_symbol):
+    """Fetches race data for ALL brokers instantly using the index."""
+    if db is None: return pd.DataFrame()
+    
+    cursor = db["market_trades"].find(
+        {"stock": stock_symbol}, 
+        {"_id": 0, "date": 1, "b_qty": 1, "s_qty": 1, "broker": 1}
+    )
+    df = pd.DataFrame(list(cursor))
+    if df.empty: return df
+
+    df["Date"] = pd.to_datetime(df["date"], errors='coerce')
+    df["Net_Qty"] = pd.to_numeric(df.get("b_qty", 0)) - pd.to_numeric(df.get("s_qty", 0))
+    df["Broker"] = "Broker " + df["broker"].astype(str)
+    
+    # Sort and calculate cumsum per broker mathematically in Pandas
+    df = df.sort_values(["Broker", "Date"]).reset_index(drop=True)
+    df["Cum_Net_Qty"] = df.groupby("Broker")["Net_Qty"].cumsum()
+    return df
 
 @st.cache_data(ttl=600)
-def fetch_broker_race_data(stock_symbol, valid_collections):
-    """Fetches individual cumulative inventory for every single broker for a specific stock."""
+def fetch_collective_data(stock_symbol):
+    """Let MongoDB do the math in 0.01 seconds using the Aggregation Pipeline."""
     if db is None: return pd.DataFrame()
-    target_cols = [c for c in valid_collections if c.split("_")[0] == stock_symbol]
     
-    all_dfs = []
-    for col in target_cols:
-        broker_id = col.split("_")[1]
-        cursor = db[col].find({}, {"_id": 0, "date": 1, "b_qty": 1, "s_qty": 1})
-        df = pd.DataFrame(list(cursor))
-        if not df.empty:
-            df["Date"] = pd.to_datetime(df["date"], errors='coerce')
-            df["Net_Qty"] = pd.to_numeric(df.get("b_qty", 0)) - pd.to_numeric(df.get("s_qty", 0))
-            df = df.sort_values("Date").reset_index(drop=True)
-            df["Cum_Net_Qty"] = df["Net_Qty"].cumsum()
-            df["Broker"] = f"Broker {broker_id}"
-            all_dfs.append(df[["Date", "Broker", "Cum_Net_Qty", "Net_Qty"]])
-            
-    return pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame()
-
-
-@st.cache_data(ttl=600)
-def fetch_collective_data(stock_symbol, valid_collections):
-    """Aggregates data for a stock across ALL brokers in the database."""
-    if db is None: return pd.DataFrame()
-    target_cols = [c for c in valid_collections if c.split("_")[0] == stock_symbol]
+    pipeline = [
+        {"$match": {"stock": stock_symbol}},
+        {"$group": {
+            "_id": "$date",
+            "Buy_Qty": {"$sum": {"$toDouble": "$b_qty"}},
+            "Sell_Qty": {"$sum": {"$toDouble": "$s_qty"}},
+            "Buy_Amount": {"$sum": {"$toDouble": "$b_amt"}},
+            "Sell_Amount": {"$sum": {"$toDouble": "$s_amt"}}
+        }},
+        {"$sort": {"_id": 1}}
+    ]
     
-    all_dfs = []
-    for col in target_cols:
-        cursor = db[col].find({}, {"_id": 0})
-        df = pd.DataFrame(list(cursor))
-        if not df.empty:
-            all_dfs.append(df)
-            
-    if not all_dfs: return pd.DataFrame()
-        
-    combined = pd.concat(all_dfs, ignore_index=True)
-    combined["Date"] = pd.to_datetime(combined["date"], errors='coerce')
-    combined["Buy_Qty"] = pd.to_numeric(combined.get("b_qty", 0))
-    combined["Sell_Qty"] = pd.to_numeric(combined.get("s_qty", 0))
-    combined["Buy_Amount"] = pd.to_numeric(combined.get("b_amt", 0))
-    combined["Sell_Amount"] = pd.to_numeric(combined.get("s_amt", 0))
+    cursor = db["market_trades"].aggregate(pipeline)
+    df = pd.DataFrame(list(cursor))
     
-    agg_df = combined.groupby("Date", as_index=False).agg({
-        "Buy_Qty": "sum", "Sell_Qty": "sum", "Buy_Amount": "sum", "Sell_Amount": "sum"
-    }).sort_values(by="Date").reset_index(drop=True)
+    if df.empty: return df
     
-    agg_df["Net_Qty"] = agg_df["Buy_Qty"] - agg_df["Sell_Qty"]
-    agg_df["Total_Vol"] = agg_df["Buy_Qty"] + agg_df["Sell_Qty"]
-    agg_df["Daily_VWAP"] = np.where(agg_df["Total_Vol"] > 0, (agg_df["Buy_Amount"] + agg_df["Sell_Amount"]) / agg_df["Total_Vol"], 0)
-    agg_df["Cum_Net_Qty"] = agg_df["Net_Qty"].cumsum()
-    
-    return agg_df
+    df.rename(columns={"_id": "date"}, inplace=True)
+    df["Date"] = pd.to_datetime(df["date"], errors='coerce')
+    df["Net_Qty"] = df["Buy_Qty"] - df["Sell_Qty"]
+    df["Total_Vol"] = df["Buy_Qty"] + df["Sell_Qty"]
+    df["Daily_VWAP"] = np.where(df["Total_Vol"] > 0, (df["Buy_Amount"] + df["Sell_Amount"]) / df["Total_Vol"], 0)
+    df["Cum_Net_Qty"] = df["Net_Qty"].cumsum()
+    return df
 
 # ==========================================
 # 🚀 MAIN APP EXECUTOR
@@ -125,8 +118,11 @@ def run():
         st.error("Cannot connect to MongoDB. Check secrets and network.")
         return
 
-    collections = db.list_collection_names()
-    valid_collections = sorted([c for c in collections if "_" in c])
+    # Find unique stock/broker combinations using the fast MongoDB distinct feature
+    unique_pairs = list(db["market_trades"].aggregate([
+        {"$group": {"_id": {"stock": "$stock", "broker": "$broker"}}}
+    ]))
+    valid_collections = sorted([f"{p['_id']['stock']}_{p['_id']['broker']}" for p in unique_pairs])
 
     if not valid_collections:
         st.info("No stock data found in MongoDB. Run the Auto-Fetcher first!")
@@ -135,8 +131,10 @@ def run():
     selected_col = st.selectbox("Select Target (Format: STOCK_BROKER):", valid_collections)
 
     if selected_col:
-        stock_symbol = selected_col.split("_")[0]
-        raw_df = fetch_and_clean_data(selected_col)
+        stock_symbol, broker_id = selected_col.split("_")
+        
+        # Notice we pass stock and broker separately now, and remove valid_collections from the args!
+        raw_df = fetch_and_clean_data(stock_symbol, broker_id)
         
         if raw_df.empty:
             st.warning(f"No data found for {selected_col}.")
