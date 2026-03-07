@@ -5,3 +5,4 @@ dnspython
 plotly
 cloudscraper
 google-generativeai
+openai
