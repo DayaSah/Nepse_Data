@@ -22,6 +22,7 @@ def get_stock_list_v2():
     client = get_db_connection()
     if not client: return []
     db = client["StockHoldingByTMS"]
+    # Efficiently fetch unique stocks from the master collection
     return sorted(db["market_trades"].distinct("stock"))
 
 def run():
@@ -48,7 +49,7 @@ def run():
         selected_stock = st.selectbox("Select Target Stock", stocks_available, key="vis_stock")
     
     with col2:
-        # V2: Fetch brokers who specifically traded the selected stock
+        # V2: Context-aware broker list based on selected stock
         brokers_available = sorted(master_col.distinct("broker", {"stock": selected_stock}), key=lambda x: int(x))
         selected_tms = st.selectbox("Select TMS Node", brokers_available, key="vis_tms")
         
@@ -63,9 +64,9 @@ def run():
     if time_horizon == "Custom Range":
         custom_dates = st.date_input("Select Range", [])
 
-    # 2. Execution & Multi-Dimensional Processing
+    # 2. Execution & Processing
     if st.button("🌌 Render Holographics", type="primary"):
-        # Build Master Query
+        # V2 Optimized Query
         query = {"stock": selected_stock, "broker": str(selected_tms)}
         
         if time_horizon != "All Time":
@@ -88,7 +89,7 @@ def run():
         df = pd.DataFrame(data)
         df['date'] = pd.to_datetime(df['date'])
         
-        # Standardize numeric fields
+        # Numeric Sanitization
         for col in ['b_qty', 's_qty', 'b_amt', 's_amt']:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
@@ -106,13 +107,12 @@ def run():
 
         # --- 4. VISUALIZATION MATRIX ---
         
-        # 🟢 THE ACCUMULATION CURVE
+        # 🟢 CHART 1: THE ACCUMULATION CURVE
         st.markdown("### 🌊 Inventory Accumulation Curve")
-        # Color the curve based on final holding status
         curve_color = "#00ff00" if df['Cum Net Qty'].iloc[-1] >= 0 else "#ff0000"
         st.area_chart(df.set_index('date')['Cum Net Qty'], color=curve_color)
 
-        # Tabs for Analytical Dimensions
+        # Create tabs for multi-dimensional analysis
         v_tab1, v_tab2, v_tab3 = st.tabs(["📊 Volume Dynamics", "💰 Price & Capital", "🧠 Behavioral Patterns"])
 
         with v_tab1:
@@ -124,7 +124,9 @@ def run():
                 barmode='relative', 
                 hovermode="x unified", 
                 title="Daily Volume Delta (Magnitude of Trade)",
-                plot_bgcolor='rgba(0,0,0,0)'
+                plot_bgcolor='rgba(0,0,0,0)',
+                xaxis_title="Timeline",
+                yaxis_title="Quantity"
             )
             st.plotly_chart(fig_vol, use_container_width=True)
 
@@ -140,6 +142,7 @@ def run():
                     hole=0.4,
                     color_discrete_sequence=['#636EFA', '#FECB52']
                 )
+                fig_pie.update_traces(textinfo='percent+label')
                 st.plotly_chart(fig_pie, use_container_width=True)
                 
             with colB:
@@ -153,9 +156,10 @@ def run():
                     )
                     st.plotly_chart(fig_scatter, use_container_width=True)
                 else:
-                    st.info("No buy transactions in this window.")
+                    st.info("No buy transactions to plot.")
 
             st.markdown("#### Execution Price Density")
+            # Combine non-zero rates for a full picture of trading zones
             valid_rates = pd.concat([df[df['b_qty']>0]['Buy Rate'], df[df['s_qty']>0]['Sell Rate']])
             if not valid_rates.empty:
                 fig_hist = px.histogram(
@@ -163,12 +167,12 @@ def run():
                     title="Volume Weighting at Specific Price Points",
                     color_discrete_sequence=['#AB63FA']
                 )
-                fig_hist.update_layout(xaxis_title="Price (Rs.)", yaxis_title="Trade Frequency")
+                fig_hist.update_layout(xaxis_title="Price (Rs.)", yaxis_title="Trade Frequency", bargap=0.1)
                 st.plotly_chart(fig_hist, use_container_width=True)
 
         with v_tab3:
             st.markdown("#### Weekday Aggression Profile")
-            st.markdown("*Identifying day-specific trading biases.*")
+            st.markdown("*Determining if this broker is more aggressive on specific market days.*")
             day_order = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
             day_df = df.groupby('Day of Week')[['b_qty', 's_qty']].sum().reindex(day_order).fillna(0).reset_index()
             
@@ -181,6 +185,7 @@ def run():
             ))
             fig_radar.update_layout(
                 polar=dict(radialaxis=dict(visible=True, showticklabels=False)),
-                showlegend=True
+                showlegend=True,
+                title="Aggression Radar"
             )
             st.plotly_chart(fig_radar, use_container_width=True)
