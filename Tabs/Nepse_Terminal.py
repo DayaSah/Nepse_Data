@@ -430,7 +430,7 @@ def run():
                 st.markdown("Tracks the cumulative inventory of **every single broker** simultaneously.")
                 st.info("💡 **Pro Tip:** Double-click any broker in the legend to isolate their line, or single-click to turn them off.")
                 
-                race_df = fetch_broker_race_data(selected_stock, valid_collections)
+                race_df = fetch_broker_race_data(stock_symbol, valid_collections)
                 
                 if not race_df.empty:
                     if len(date_range) == 2:
