@@ -12,6 +12,9 @@ MONGO_URI = os.getenv("MONGO_URI")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# --- CUSTOM EXTRACTION TARGETS ---
+TARGET_STOCKS = ['KKHC', 'RHGCL', 'SPL', 'RIDI', 'NGPL', 'RADHI']
+
 # --- GLOBAL TRACKERS FOR FINAL REPORT ---
 fetch_report = {
     "stocks_updated": set(),
@@ -47,19 +50,9 @@ def get_db():
 
 db = get_db()
 
-# Exclude merged/suspended/inactive brokers
+# Exclude merged/suspended/inactive brokers (Scanning 1 to 100)
 DEAD_BROKERS = [2, 9, 12, 15, 27, 30, 31, 54]
-ACTIVE_BROKERS = [str(i) for i in range(1, 91) if i not in DEAD_BROKERS]
-
-def get_tracked_stocks():
-    """Scans the master market_trades collection to find which stock symbols are actively tracked."""
-    if db is None: return []
-    try:
-        stocks = db["market_trades"].distinct("stock")
-        return list(stocks)
-    except Exception as e:
-        print(f"⚠️ Error scanning for tracked stocks: {e}")
-        return []
+ACTIVE_BROKERS = [str(i) for i in range(1, 101) if i not in DEAD_BROKERS]
 
 def safe_num(val, is_float=False):
     if val is None or str(val).strip() == "": return 0.0 if is_float else 0
@@ -116,16 +109,11 @@ async def global_network_radar(response):
 
 # --- THE MAIN ORCHESTRATOR ---
 async def run_automation():
-    stocks_to_update = get_tracked_stocks()
-    if not stocks_to_update:
-        msg = "⚠️ No existing stocks found in MongoDB. Database is empty."
-        print(msg)
-        send_telegram_alert(msg)
-        return
-
+    stocks_to_update = TARGET_STOCKS
+    
     print("="*40)
     print(f"☁️ NEPSE GHOST FETCHER STARTING...")
-    print(f"🔄 Targets: {len(stocks_to_update)} stocks")
+    print(f"🔄 Targets: {len(stocks_to_update)} stocks (2-Year Deep Scan)")
     print("="*40)
 
     async with async_playwright() as p:
@@ -153,12 +141,14 @@ async def run_automation():
             return
 
         for stock in stocks_to_update:
-            print(f"\n📈 Scanning Market Data for: {stock}")
+            print(f"\n📈 Scanning 2-Year Market Data for: {stock}")
             for b_id in ACTIVE_BROKERS:
-                api_url = f"https://nepsealpha.com/floorsheet-history/filter?fsk=1772847797646&symbol={stock}&broker={b_id}&dateRangeType=1month"
+                # V2 URL Injection: 2 Year Range & Custom FSK
+                api_url = f"https://nepsealpha.com/floorsheet-history/filter?fsk=1772886222600&symbol={stock}&broker={b_id}&dateRangeType=2year"
                 
                 try:
                     await page.goto(api_url, timeout=30000)
+                    # Random delay to prevent IP ban while deep-scanning
                     await asyncio.sleep(random.uniform(3, 7)) 
                 except Exception:
                     print(f"⚠️ Broker {b_id} timed out. Skipping...")
@@ -172,7 +162,7 @@ async def run_automation():
     
     if success_count > 0:
         final_msg = (
-            f"✅ **NEPSE Update Complete!**\n\n"
+            f"✅ **2-YEAR DEEP SCAN COMPLETE!**\n\n"
             f"📈 Stocks Successfully Passed: {success_count} / {len(stocks_to_update)}\n"
             f"🐋 Whale Alerts Fired: {fetch_report['whale_alerts']}\n"
             f"⚠️ Minor Errors/Timeouts: {fetch_report['errors']}\n\n"
