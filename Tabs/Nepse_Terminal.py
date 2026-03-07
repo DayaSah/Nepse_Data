@@ -2,16 +2,15 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from pymongo import MongoClient
 import google.generativeai as genai
 
 # --- 1. MONGODB CONNECTION ---
-# We keep this outside the run() function so Streamlit can cache the connection
-# across page reloads without creating hundreds of connections to MongoDB.
 @st.cache_resource
 def init_connection():
     try:
-        # Pulls URI from your Streamlit secrets
         return MongoClient(st.secrets["mongo"]["uri"])
     except Exception as e:
         st.error(f"🔴 Database Connection Failed: {e}")
@@ -30,11 +29,9 @@ try:
 except Exception as e:
     model = None
 
-
-# --- 3. DATA FETCHING LOGIC ---
-@st.cache_data(ttl=600) # Caches the data for 10 minutes to speed up the app
+# --- 3. DATA FETCHING & PREPARATION ---
+@st.cache_data(ttl=600)
 def fetch_and_clean_data(collection_name):
-    """Fetches data from Mongo and calculates VWAP and Net Qty."""
     if db is None:
         return pd.DataFrame()
         
@@ -44,23 +41,24 @@ def fetch_and_clean_data(collection_name):
     if df.empty:
         return df
         
-    # Standardize columns
     df["Date"] = pd.to_datetime(df["date"], errors='coerce')
     df["Buy_Qty"] = pd.to_numeric(df.get("b_qty", 0))
     df["Sell_Qty"] = pd.to_numeric(df.get("s_qty", 0))
     df["Buy_Amount"] = pd.to_numeric(df.get("b_amt", 0))
     df["Sell_Amount"] = pd.to_numeric(df.get("s_amt", 0))
     
-    # Advanced Calculations
     df["Net_Qty"] = df["Buy_Qty"] - df["Sell_Qty"]
-    df["Total_Qty"] = df["Buy_Qty"] + df["Sell_Qty"]
-    df["Total_Amount"] = df["Buy_Amount"] + df["Sell_Amount"]
+    df["Net_Amount"] = df["Buy_Amount"] - df["Sell_Amount"]
+    df["Total_Vol"] = df["Buy_Qty"] + df["Sell_Qty"]
+    df["Daily_VWAP"] = np.where(df["Total_Vol"] > 0, (df["Buy_Amount"] + df["Sell_Amount"]) / df["Total_Vol"], 0)
     
-    # Calculate VWAP (Volume Weighted Average Price) safely to avoid Division by Zero
-    df["Daily_VWAP"] = np.where(df["Total_Qty"] > 0, df["Total_Amount"] / df["Total_Qty"], 0)
+    # Needs to be sorted by date for rolling averages and cumsum to work perfectly
+    df = df.sort_values(by="Date").reset_index(drop=True)
     
-    return df.sort_values(by="Date").reset_index(drop=True)
-
+    df["Cum_Net_Qty"] = df["Net_Qty"].cumsum()
+    df["Avg_30D_Vol"] = df["Total_Vol"].rolling(window=30, min_periods=1).mean()
+    
+    return df
 
 # ==========================================
 # 🚀 MAIN APP EXECUTOR
@@ -73,7 +71,6 @@ def run():
         st.error("Cannot connect to MongoDB. Check secrets and network.")
         return
 
-    # Dynamically list all collections in MongoDB
     collections = db.list_collection_names()
     valid_collections = sorted([c for c in collections if "_" in c])
 
@@ -81,7 +78,6 @@ def run():
         st.info("No stock data found in MongoDB. Run the Auto-Fetcher first!")
         return
 
-    # Collection Selector
     selected_col = st.selectbox("Select Target (Format: STOCK_BROKER):", valid_collections)
 
     if selected_col:
@@ -89,161 +85,236 @@ def run():
         
         if raw_df.empty:
             st.warning(f"No data found for {selected_col}.")
+            return
+            
+        # Global Date Filter
+        min_date, max_date = raw_df["Date"].min().date(), raw_df["Date"].max().date()
+        date_range = st.date_input("🗓️ Select Date Range:", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+        
+        if len(date_range) == 2:
+            mask = (raw_df["Date"].dt.date >= date_range[0]) & (raw_df["Date"].dt.date <= date_range[1])
+            df = raw_df.loc[mask].copy().reset_index(drop=True)
+            # Recalculate cum_net_qty for the specific zoomed-in range
+            df["Cum_Net_Qty"] = df["Net_Qty"].cumsum()
         else:
-            # Global Date Filter for all tabs
-            min_date, max_date = raw_df["Date"].min().date(), raw_df["Date"].max().date()
-            date_range = st.date_input("🗓️ Select Date Range:", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+            df = raw_df.copy()
+
+        # --- SETUP 5 MEGA TABS ---
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📂 Ledger & Matrix", 
+            "🚀 Advanced Metrics", 
+            "📊 Optics & Trends", 
+            "🐳 Volume & Whales", 
+            "🤖 AI Advisor"
+        ])
+        
+        # ------------------------------------------
+        # TAB 1: RAW DATA (Color Coded Aggression)
+        # ------------------------------------------
+        with tab1:
+            st.subheader(f"🧮 Data Matrix: {selected_col}")
+            st.markdown("Color-coded by Aggression (Dark Green = Heavy Accumulation, Dark Red = Heavy Dumping)")
             
-            if len(date_range) == 2:
-                mask = (raw_df["Date"].dt.date >= date_range[0]) & (raw_df["Date"].dt.date <= date_range[1])
-                df = raw_df.loc[mask]
+            def apply_color_strength(row):
+                net, avg_vol = row["Net_Qty"], row["Avg_30D_Vol"]
+                if avg_vol == 0 or pd.isna(avg_vol): return [''] * len(row)
+                alpha = min(max((abs(net) / avg_vol) * 0.5, 0.15), 0.85)
+                color = f"rgba(0, 200, 0, {alpha})" if net > 0 else f"rgba(255, 0, 0, {alpha})" if net < 0 else "rgba(128, 128, 128, 0.2)"
+                return [f"background-color: {color}; color: white;"] * len(row)
+
+            display_df = df.copy()
+            display_df["Date"] = display_df["Date"].dt.strftime('%Y-%m-%d')
+            fmt_df = display_df[["Date", "Buy_Qty", "Sell_Qty", "Net_Qty", "Buy_Amount", "Sell_Amount", "Net_Amount", "Daily_VWAP", "Avg_30D_Vol"]].copy()
+            
+            styled_df = fmt_df.style.apply(apply_color_strength, axis=1).format({
+                "Buy_Qty": "{:,.0f}", "Sell_Qty": "{:,.0f}", "Net_Qty": "{:,.0f}",
+                "Buy_Amount": "{:,.0f}", "Sell_Amount": "{:,.0f}", "Net_Amount": "{:,.0f}",
+                "Daily_VWAP": "{:.2f}", "Avg_30D_Vol": "{:,.0f}"
+            })
+            
+            st.dataframe(styled_df, use_container_width=True, height=500)
+
+        # ------------------------------------------
+        # TAB 2: ADVANCED QUANTITATIVE ANALYSIS
+        # ------------------------------------------
+        with tab2:
+            st.markdown("### 💰 Profitability & WACC Metrics")
+            total_buy_qty = df["Buy_Qty"].sum()
+            total_buy_amt = df["Buy_Amount"].sum()
+            total_sell_qty = df["Sell_Qty"].sum()
+            total_sell_amt = df["Sell_Amount"].sum()
+            current_inventory = df["Cum_Net_Qty"].iloc[-1] if not df.empty else 0
+            
+            buy_wacc = (total_buy_amt / total_buy_qty) if total_buy_qty > 0 else 0
+            sell_wacc = (total_sell_amt / total_sell_qty) if total_sell_qty > 0 else 0
+            realized_pl = total_sell_qty * (sell_wacc - buy_wacc)
+            
+            net_capital_flow = total_buy_amt - total_sell_amt
+            break_even = (net_capital_flow / current_inventory) if current_inventory > 0 else 0
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Average Buy WACC", f"Rs {buy_wacc:,.2f}")
+            m2.metric("Average Sell WACC", f"Rs {sell_wacc:,.2f}")
+            m3.metric("Inventory Left", f"{current_inventory:,.0f} Units")
+
+            m4, m5, m6 = st.columns(3)
+            m4.metric("Realized P/L (Cleared Trades)", f"Rs {realized_pl:,.2f}", delta="Profit" if realized_pl > 0 else "Loss")
+            
+            if current_inventory > 0:
+                if break_even < 0:
+                    m5.metric("Remaining Break-Even", "Risk Free!", delta="Fully Recovered Initial Capital", delta_color="normal")
+                else:
+                    m5.metric("Remaining Break-Even", f"Rs {break_even:,.2f}", delta="Target Price to Recover Money", delta_color="off")
             else:
-                df = raw_df
+                m5.metric("Remaining Break-Even", "N/A", delta="No inventory left")
 
-            # --- SETUP 4 TABS ---
-            tab1, tab2, tab3, tab4 = st.tabs(["📂 Raw Database", "🚀 Advanced Heatmap", "📊 Visual Optics", "🤖 AI Advisor"])
+            st.write("---")
+            st.markdown("### 🗓️ Improved Day-of-Week Heatmap")
+            with st.expander("📖 How to Read this Heatmap", expanded=False):
+                st.info("""
+                **What it tells you:**
+                This chart shows exactly which days of the week the broker is most active, broken down by month.
+                - 🟩 **Green Boxes:** Aggressive buying.
+                - 🟥 **Red Boxes:** Aggressive dumping.
+                - **Pro Tip:** Look for patterns. E.g., If they always show deep red on Thursdays, they might be systematically booking profits before the weekend.
+                """)
             
-            # ------------------------------------------
-            # TAB 1: RAW DATA
-            # ------------------------------------------
-            with tab1:
-                st.subheader(f"Raw Data Ledger: {selected_col}")
-                st.dataframe(df[["Date", "Buy_Qty", "Sell_Qty", "Net_Qty", "Daily_VWAP"]].sort_values("Date", ascending=False), use_container_width=True)
+            df_heat = df.copy()
+            df_heat['Day'] = df_heat['Date'].dt.day_name()
+            df_heat['Month'] = df_heat['Date'].dt.strftime('%b %Y')
+            
+            nepse_days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"]
+            df_heat = df_heat[df_heat['Day'].isin(nepse_days)]
+            df_heat['Day'] = pd.Categorical(df_heat['Day'], categories=nepse_days, ordered=True)
+            
+            try:
+                heat_pivot = df_heat.groupby(['Month', 'Day'], observed=False)['Net_Qty'].sum().unstack().fillna(0)
+                fig_heat = px.imshow(heat_pivot, color_continuous_scale="RdYlGn", color_continuous_midpoint=0, text_auto=".0f", aspect="auto")
+                fig_heat.update_layout(height=450, margin=dict(t=20, b=20))
+                st.plotly_chart(fig_heat, use_container_width=True)
+            except Exception:
+                st.warning("Not enough variance to build heatmap.")
 
-            # ------------------------------------------
-            # TAB 2: ADVANCED HEATMAP
-            # ------------------------------------------
-            with tab2:
-                st.subheader("🗓️ Behavioral Heatmap")
-                st.markdown("Identify which days of the week this broker systematically buys or dumps.")
-                
-                df_heat = df.copy()
-                df_heat['Day'] = df_heat['Date'].dt.day_name()
-                df_heat['Month'] = df_heat['Date'].dt.strftime('%b %Y')
-                
-                # Filter strictly for NEPSE trading days
-                nepse_days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"]
-                df_heat = df_heat[df_heat['Day'].isin(nepse_days)]
-                df_heat['Day'] = pd.Categorical(df_heat['Day'], categories=nepse_days, ordered=True)
-                
-                try:
-                    heat_pivot = df_heat.groupby(['Month', 'Day'], observed=False)['Net_Qty'].sum().unstack().fillna(0)
-                    fig_heat = px.imshow(
-                        heat_pivot, 
-                        color_continuous_scale="RdYlGn", 
-                        color_continuous_midpoint=0, 
-                        text_auto=".0f", 
-                        aspect="auto",
-                        title=f"Net Quantity Heatmap ({selected_col})"
-                    )
-                    fig_heat.update_layout(height=450, margin=dict(t=40, b=20))
-                    st.plotly_chart(fig_heat, use_container_width=True)
-                except Exception as e:
-                    st.error(f"Not enough data to generate Heatmap: {e}")
+        # ------------------------------------------
+        # TAB 3: VISUAL OPTICS & TRENDS
+        # ------------------------------------------
+        with tab3:
+            st.markdown("### 1. Volume & Inventory Accumulation")
+            fig1 = make_subplots(specs=[[{"secondary_y": True}]])
+            fig1.add_trace(go.Bar(x=df["Date"], y=df["Buy_Qty"], name="Buy Qty", marker_color="rgba(39, 174, 96, 0.7)"), secondary_y=False)
+            fig1.add_trace(go.Bar(x=df["Date"], y=-df["Sell_Qty"], name="Sell Qty", marker_color="rgba(231, 76, 60, 0.7)"), secondary_y=False)
+            fig1.add_trace(go.Scatter(x=df["Date"], y=df["Cum_Net_Qty"], name="Cum. Inventory", line=dict(color="#2980b9", width=4)), secondary_y=True)
+            fig1.update_layout(barmode='relative', height=500, hovermode="x unified", margin=dict(t=30))
+            st.plotly_chart(fig1, use_container_width=True)
 
-            # ------------------------------------------
-            # TAB 3: VISUAL OPTICS
-            # ------------------------------------------
-            with tab3:
-                st.subheader("🎨 Accumulation & Price Optics")
-                colA, colB = st.columns(2)
-                
-                with colA:
-                    st.markdown("**Months with Heaviest Buying**")
+            st.write("---")
+            c_gauge, c_pie = st.columns(2)
+            with c_gauge:
+                st.markdown("### 2. Market Sentiment Gauge")
+                total_net = df["Net_Qty"].sum()
+                max_vol = df["Total_Vol"].sum() if df["Total_Vol"].sum() > 0 else 1
+                fig4 = go.Figure(go.Indicator(
+                    mode="gauge+number+delta", value=total_net, title={'text': "Total Net Accumulation"},
+                    gauge={'axis': {'range': [-max_vol, max_vol]}, 'bar': {'color': "rgba(0,0,0,0.5)"},
+                           'steps': [{'range': [-max_vol, 0], 'color': "rgba(231, 76, 60, 0.4)"}, 
+                                     {'range': [0, max_vol], 'color': "rgba(39, 174, 96, 0.4)"}]}
+                ))
+                fig4.update_layout(height=350, margin=dict(t=50, b=0))
+                st.plotly_chart(fig4, use_container_width=True)
+
+            with c_pie:
+                st.markdown("### 3. Dynamic Breakdown (Pie)")
+                pie_type = st.selectbox("Select Metric:", ["Total Buy vs Sell Qty", "Net Accumulation by Month"])
+                if pie_type == "Total Buy vs Sell Qty":
+                    fig5 = px.pie(values=[total_buy_qty, total_sell_qty], names=["Buy Volume", "Sell Volume"], hole=0.4, color_discrete_sequence=["#27ae60", "#e74c3c"])
+                else:
                     df_month = df.copy()
                     df_month["Month"] = df_month["Date"].dt.strftime('%b %Y')
-                    buy_months = df_month[df_month["Net_Qty"] > 0].groupby("Month")["Net_Qty"].sum().reset_index()
-                    if not buy_months.empty:
-                        fig_pie = px.pie(buy_months, values="Net_Qty", names="Month", hole=0.4)
-                        fig_pie.update_layout(height=350, margin=dict(t=30, b=0))
-                        st.plotly_chart(fig_pie, use_container_width=True)
-                    else:
-                        st.info("No net buying months found.")
+                    month_group = df_month[df_month["Net_Qty"] > 0].groupby("Month")["Net_Qty"].sum().reset_index()
+                    fig5 = px.pie(month_group, values="Net_Qty", names="Month", hole=0.4)
+                fig5.update_layout(height=350, margin=dict(t=30, b=0))
+                st.plotly_chart(fig5, use_container_width=True)
 
-                with colB:
-                    st.markdown("**Months with Heaviest Dumping**")
-                    sell_months = df_month[df_month["Net_Qty"] < 0].copy()
-                    sell_months["Net_Qty"] = sell_months["Net_Qty"].abs()
-                    sell_group = sell_months.groupby("Month")["Net_Qty"].sum().reset_index()
-                    if not sell_group.empty:
-                        fig_pie2 = px.pie(sell_group, values="Net_Qty", names="Month", hole=0.4)
-                        fig_pie2.update_layout(height=350, margin=dict(t=30, b=0))
-                        st.plotly_chart(fig_pie2, use_container_width=True)
-                    else:
-                        st.info("No net selling months found.")
+            st.write("---")
+            st.markdown("### 4. Trading Behavior (Price vs Net Quantity)")
+            st.caption("Are they buying when the price is low (Smart Money) or high (Dumb Money/FOMO)?")
+            try:
+                fig6 = px.scatter(df, x="Daily_VWAP", y="Net_Qty", color="Net_Qty", color_continuous_scale="RdYlGn", color_continuous_midpoint=0, hover_data=["Date"], trendline="ols")
+                fig6.add_hline(y=0, line_width=2, line_dash="dash", line_color="black")
+                fig6.update_layout(height=500, xaxis_title="Daily Average Price (VWAP)", yaxis_title="Net Quantity (Buy - Sell)")
+                st.plotly_chart(fig6, use_container_width=True)
+            except Exception:
+                st.warning("Trendline failed. Displaying simple scatter.")
+                st.plotly_chart(px.scatter(df, x="Daily_VWAP", y="Net_Qty", color="Net_Qty", color_continuous_scale="RdYlGn", color_continuous_midpoint=0), use_container_width=True)
 
-                st.write("---")
-                st.markdown("### 📈 Price vs Net Quantity (Smart Money Tracker)")
-                st.caption("Are they buying when the price is low (Smart Money) or high (FOMO)?")
+        # ------------------------------------------
+        # TAB 4: WHALE ACTION & VOLUME PROFILE
+        # ------------------------------------------
+        with tab4:
+            st.markdown("### 1. Volume by Price (Support & Resistance Zones)")
+            vp_df = df[df["Daily_VWAP"] > 0].copy()
+            if not vp_df.empty and vp_df["Daily_VWAP"].nunique() > 1:
+                bins = np.linspace(vp_df["Daily_VWAP"].min(), vp_df["Daily_VWAP"].max(), 15)
+                vp_df['Price_Zone'] = pd.cut(vp_df['Daily_VWAP'], bins=bins)
+                profile = vp_df.groupby('Price_Zone', observed=False).agg({'Buy_Qty': 'sum', 'Sell_Qty': 'sum'}).reset_index()
+                profile['Price_Level'] = profile['Price_Zone'].apply(lambda x: f"Rs {int(x.mid)}" if pd.notnull(x) else "Unknown")
                 
-                try:
-                    # Scatter Plot with OLS Trendline
-                    fig_scatter = px.scatter(
-                        df, x="Daily_VWAP", y="Net_Qty", 
-                        color="Net_Qty", color_continuous_scale="RdYlGn", color_continuous_midpoint=0,
-                        hover_data=["Date"], trendline="ols"
-                    )
-                    fig_scatter.add_hline(y=0, line_width=2, line_dash="dash", line_color="black")
-                    fig_scatter.update_layout(height=500, margin=dict(t=30, b=0))
-                    st.plotly_chart(fig_scatter, use_container_width=True)
-                except Exception as e:
-                    st.warning("Not enough variance to plot OLS trendline. Displaying basic scatter.")
-                    fig_scatter = px.scatter(
-                        df, x="Daily_VWAP", y="Net_Qty", 
-                        color="Net_Qty", color_continuous_scale="RdYlGn", color_continuous_midpoint=0,
-                        hover_data=["Date"]
-                    )
-                    st.plotly_chart(fig_scatter, use_container_width=True)
+                fig2 = go.Figure()
+                fig2.add_trace(go.Bar(y=profile['Price_Level'], x=profile['Buy_Qty'], name='Buy Vol', orientation='h', marker_color='rgba(39, 174, 96, 0.8)'))
+                fig2.add_trace(go.Bar(y=profile['Price_Level'], x=-profile['Sell_Qty'], name='Sell Vol', orientation='h', marker_color='rgba(231, 76, 60, 0.8)'))
+                fig2.update_layout(barmode='relative', yaxis=dict(autorange="reversed"), height=500, hovermode="y unified", margin=dict(t=30))
+                st.plotly_chart(fig2, use_container_width=True)
+            else:
+                st.info("Not enough price variation for a Volume Profile.")
 
-            # ------------------------------------------
-            # TAB 4: AI ADVISOR (GEMINI)
-            # ------------------------------------------
-            with tab4:
-                st.subheader("🤖 Wall Street AI Analyst")
-                if model is None:
-                    st.error("Gemini API not configured. Check secrets.toml.")
-                else:
-                    total_days = len(df)
-                    net_inventory = df["Net_Qty"].sum()
-                    
-                    # Calculate True WACC safely
-                    total_buy_amt = df["Buy_Amount"].sum()
-                    total_buy_qty = df["Buy_Qty"].sum()
-                    wacc = (total_buy_amt / total_buy_qty) if total_buy_qty > 0 else 0
-                    
-                    # 5-Day Momentum
-                    recent_5_days = df.sort_values(by="Date", ascending=False).head(5)
-                    recent_trend = recent_5_days[["Date", "Net_Qty", "Daily_VWAP"]].to_string(index=False)
-                    
-                    # Dynamic User Prompt
-                    user_question = st.text_input("Ask the AI a specific question about this broker's strategy:", 
-                                                  placeholder="E.g., Are they accumulating or just trading ranges?")
-                    
-                    if st.button("Generate Quant Analysis", type="primary"):
-                        with st.spinner("🧠 Gemini is analyzing the order flow..."):
-                            prompt = f"""
-                            You are a highly advanced Quantitative Analyst for the Nepal Stock Exchange (NEPSE).
-                            I am providing you with the trading summary of {selected_col}.
-                            
-                            DATA SUMMARY:
-                            - Trading Days Logged: {total_days}
-                            - Current Holding Inventory (Net Qty): {net_inventory}
-                            - Estimated Weighted Average Cost (WACC): Rs {wacc:.2f}
-                            
-                            RECENT 5-DAY MOMENTUM:
-                            {recent_trend}
-                            
-                            Based on this data, provide a professional, highly analytical response. 
-                            If the Net Inventory is highly positive, they are accumulating. If negative, they are dumping.
-                            Look at the recent 5 days to see if their behavior changed recently.
-                            Keep the response concise, formatted with bullet points, and act like a Wall Street advisor.
-                            
-                            User's specific question: {user_question if user_question else "Provide a general accumulation/distribution analysis and strategic advice."}
-                            """
-                            try:
-                                response = model.generate_content(prompt)
-                                st.write("---")
-                                st.markdown("### 🤖 Analyst Report")
-                                st.write(response.text)
-                            except Exception as e:
-                                st.error(f"AI Generation Failed: {e}")
+            st.write("---")
+            st.markdown("### 2. Whale Action Bubble Chart")
+            st.caption("X=Date | Y=Average Price | Size=Total Volume | Color=Net Accumulation vs Distribution")
+            fig3 = px.scatter(df, x="Date", y="Daily_VWAP", size=df["Total_Vol"].abs(), color="Net_Qty", color_continuous_scale="RdYlGn", color_continuous_midpoint=0, hover_data=["Buy_Qty", "Sell_Qty"])
+            fig3.update_traces(marker=dict(line=dict(width=1, color='DarkSlateGrey')), selector=dict(mode='markers'))
+            fig3.update_layout(height=500, yaxis_title="Daily VWAP (Rs)", xaxis_title="Date")
+            st.plotly_chart(fig3, use_container_width=True)
+
+        # ------------------------------------------
+        # TAB 5: AI ADVISOR (GEMINI)
+        # ------------------------------------------
+        with tab5:
+            st.subheader("🤖 Wall Street AI Analyst")
+            st.markdown("Your personal AI analyst powered by Google Gemini.")
+            if model is None:
+                st.error("Gemini API not configured. Check secrets.toml.")
+            else:
+                total_days = len(df)
+                recent_trend = df.tail(5)[["Date", "Net_Qty"]].to_string(index=False)
+                
+                user_question = st.text_input("Ask the AI a specific question, or leave blank for a general report:", 
+                                              placeholder="E.g., Are they accumulating or distributing? What is their WACC?")
+                
+                if st.button("🧠 Generate AI Analysis", type="primary"):
+                    with st.spinner("🧠 Gemini is analyzing the order flow..."):
+                        prompt = f"""
+                        You are an elite quantitative analyst for the Nepal Stock Exchange (NEPSE). 
+                        I am providing you with the trading summary of {selected_col}.
+                        
+                        DATA SUMMARY:
+                        - Trading Days Logged: {total_days}
+                        - Current Holding Inventory (Net Qty): {current_inventory}
+                        - Estimated Weighted Average Cost (WACC): Rs {buy_wacc:.2f}
+                        
+                        RECENT 5-DAY MOMENTUM (Net Qty):
+                        {recent_trend}
+                        
+                        Based on this data, provide a professional, highly analytical response. 
+                        If the Net Inventory is highly positive, they are accumulating. If negative, they are dumping.
+                        Look at the recent 5 days to see if their behavior changed recently.
+                        Keep the response concise, formatted with bullet points, and act like a Wall Street advisor.
+                        
+                        User's specific question: {user_question if user_question else "Provide a general accumulation/distribution analysis and strategic advice."}
+                        """
+                        try:
+                            response = model.generate_content(prompt)
+                            st.write("---")
+                            st.markdown("### 🤖 AI Analyst Report")
+                            st.write(response.text)
+                        except Exception as e:
+                            st.error(f"AI Generation Failed: {e}")
