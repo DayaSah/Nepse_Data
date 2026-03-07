@@ -1,15 +1,16 @@
 import streamlit as st
-import importlib  # <--- NEW IMPORT
+import importlib  
+
 
 # Import the SubTabs
 try:
     from Tabs.SubTabs import Stock_Hold
     from Tabs.SubTabs import Visual
-    
-    # FOR DEVELOPMENT: Force Python to reload the newest version of these files
+    from Tabs.SubTabs import Whale
     importlib.reload(Stock_Hold)
     importlib.reload(Visual)
-    
+    importlib.reload(Whale)
+      
 except ImportError:
     st.error("❌ Failed to load SubTabs. Check your __init__.py files.")
 
@@ -43,5 +44,9 @@ def run():
             st.error(f"🛑 CRITICAL SYSTEM FAILURE: {str(e)}")
             st.exception(e)
         
-    with tab3:
-        st.info("The Whale Tracker will be implemented next.")
+    with tab3: # <--- INJECTING WHALE.PY HERE
+        try:
+            Whale.run()
+        except Exception as e:
+            st.error(f"🛑 CRITICAL SYSTEM FAILURE: {str(e)}")
+            st.exception(e)
