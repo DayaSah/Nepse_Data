@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from pymongo import MongoClient
+from datetime import datetime, timedelta
 
 # --- DATABASE CONNECTION ---
 @st.cache_resource
@@ -14,48 +15,106 @@ def get_db_connection():
 
 def run():
     st.header("TMS Stock Inventory Scanner")
-    st.markdown("Input a Broker ID to calculate their accumulated volume and average buy/sell prices.")
+    st.markdown("Select a target from the available Database Nodes and apply temporal filters.")
 
     client = get_db_connection()
     if not client:
         st.error("❌ MongoDB connection failed. Ensure Streamlit secrets are active.")
         return
 
-    # 1. User Input
-    col1, col2 = st.columns(2)
-    with col1:
-        tms_id = st.text_input("Enter Broker TMS ID (e.g., 58):", key="tms_hold_input").strip()
-    with col2:
-        stock_symbol = st.text_input("Enter Stock Symbol (e.g., NHPC):", key="stock_hold_input").upper().strip()
+    db = client["StockHoldingByTMS"]
+    collections = db.list_collection_names()
 
-    # 2. Execution Logic
+    if not collections:
+        st.warning("⚠️ No data found in the Quantum Database. Please inject data first.")
+        return
+
+    # 1. Parse Available Data for Dropdowns
+    stock_tms_map = {}
+    for coll in collections:
+        if "_" in coll:
+            stock, tms = coll.split("_", 1)
+            if stock not in stock_tms_map:
+                stock_tms_map[stock] = []
+            stock_tms_map[stock].append(tms)
+
+    stocks_available = sorted(list(stock_tms_map.keys()))
+
+    # 2. User Inputs (Dynamic Dropdowns)
+    st.markdown("### 🎯 Target Lock")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        selected_stock = st.selectbox("Select Stock Symbol", stocks_available)
+    with col2:
+        tms_available = sorted(stock_tms_map.get(selected_stock, []))
+        selected_tms = st.selectbox("Select Broker TMS ID", tms_available)
+    with col3:
+        time_horizon = st.selectbox(
+            "Temporal Filter (Date Range)", 
+            ["All Time", "Last 7 Days", "Last 15 Days", "Last 30 Days", "Last 3 Months", "Custom Range"]
+        )
+
+    # Custom Date range logic
+    custom_dates = []
+    if time_horizon == "Custom Range":
+        custom_dates = st.date_input("Select Custom Dates", [])
+
+    # 3. Execution Logic
     if st.button("📡 Scan Database"):
-        if not tms_id or not stock_symbol:
-            st.warning("⚠️ Please enter both TMS ID and Stock Symbol.")
-            return
-            
-        collection_name = f"{stock_symbol}_{tms_id}"
-        db = client["StockHoldingByTMS"]
-        
-        # Check if the collection exists
-        if collection_name not in db.list_collection_names():
-            st.error(f"❌ No data found for Broker {tms_id} holding {stock_symbol}. Did you inject it?")
-            return
-            
-        # Fetch data from MongoDB
+        collection_name = f"{selected_stock}_{selected_tms}"
         collection = db[collection_name]
-        cursor = collection.find().sort("date", 1) # Sort by date ascending
-        data = list(cursor)
+        
+        # Fetch all data and process with Pandas for easier date manipulation
+        data = list(collection.find().sort("date", 1))
         
         if not data:
-            st.warning(f"Collection {collection_name} exists but is empty.")
+            st.warning(f"Data anomaly: {collection_name} is empty.")
             return
 
-        # 3. Data Processing (Pandas)
         df = pd.DataFrame(data)
-        df = df.drop(columns=["_id"]) # Remove Mongo object ID
+        df = df.drop(columns=["_id"], errors="ignore")
         
-        # Calculate Aggregates
+        # Clean Data Types
+        df['date'] = pd.to_datetime(df['date'])
+        numeric_cols = ['b_qty', 's_qty', 'b_amt', 's_amt']
+        for col in numeric_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+
+        # 4. Apply Temporal Filter
+        latest_date = df['date'].max()
+        
+        if time_horizon == "Last 7 Days":
+            df = df[df['date'] >= (latest_date - timedelta(days=7))]
+        elif time_horizon == "Last 15 Days":
+            df = df[df['date'] >= (latest_date - timedelta(days=15))]
+        elif time_horizon == "Last 30 Days":
+            df = df[df['date'] >= (latest_date - timedelta(days=30))]
+        elif time_horizon == "Last 3 Months":
+            df = df[df['date'] >= (latest_date - timedelta(days=90))]
+        elif time_horizon == "Custom Range" and len(custom_dates) == 2:
+            start_date, end_date = custom_dates
+            df = df[(df['date'] >= pd.to_datetime(start_date)) & (df['date'] <= pd.to_datetime(end_date))]
+
+        if df.empty:
+            st.warning("⚠️ No records found in the selected temporal range.")
+            return
+
+        # 5. Advanced Matrix Calculations
+        # Handle division by zero using numpy/pandas safe operations
+        df['Buy Rate'] = (df['b_amt'] / df['b_qty']).fillna(0).round(2)
+        df['Sell Rate'] = (df['s_amt'] / df['s_qty']).fillna(0).round(2)
+        
+        # Net calculations
+        df['Net Qty'] = df['b_qty'] - df['s_qty']
+        df['Net Amt'] = df['b_amt'] - df['s_amt']
+        
+        # Cumulative calculations (requires dataframe sorted by date ascending)
+        df = df.sort_values('date', ascending=True)
+        df['Cum Qty'] = df['Net Qty'].cumsum()
+        df['Cum Amt'] = df['Net Amt'].cumsum()
+
+        # 6. Top Metrics (Based on filtered data)
         total_b_qty = df["b_qty"].sum()
         total_s_qty = df["s_qty"].sum()
         net_holding = total_b_qty - total_s_qty
@@ -63,42 +122,37 @@ def run():
         total_b_amt = df["b_amt"].sum()
         total_s_amt = df["s_amt"].sum()
         
-        # Avoid division by zero
         avg_buy_price = (total_b_amt / total_b_qty) if total_b_qty > 0 else 0
         avg_sell_price = (total_s_amt / total_s_qty) if total_s_qty > 0 else 0
         
-        # 4. Multiversal Display UI
-        st.success(f"✅ Data Retrieved for {stock_symbol} at TMS-{tms_id}")
+        # Display the UI
+        st.success(f"✅ Data Retrieved for {selected_stock} at TMS-{selected_tms} | Range: {time_horizon}")
         
         # Top Metrics
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Net Holding Volume", f"{net_holding:,}")
-        m2.metric("Total Bought", f"{total_b_qty:,}")
-        m3.metric("Total Sold", f"{total_s_qty:,}")
+        m1.metric("Net Holding Volume", f"{int(net_holding):,}")
+        m2.metric("Total Bought", f"{int(total_b_qty):,}")
+        m3.metric("Total Sold", f"{int(total_s_qty):,}")
         
-        # Color code the Holding status
         if net_holding > 0:
-            m4.metric("Status", "🟢 Accumulating")
+            m4.metric("Phase Status", "🟢 Accumulating")
         elif net_holding < 0:
-            m4.metric("Status", "🔴 Distributing")
+            m4.metric("Phase Status", "🔴 Distributing")
         else:
-            m4.metric("Status", "⚪ Neutral")
+            m4.metric("Phase Status", "⚪ Neutral")
 
         # Price Averages
-        st.markdown("### 💰 Price Averages")
+        st.markdown("### 💰 Capital Deployment Averages")
         p1, p2 = st.columns(2)
         p1.info(f"**Average Buy Price:** Rs. {avg_buy_price:.2f}")
         p2.error(f"**Average Sell Price:** Rs. {avg_sell_price:.2f}")
-
-        # Charts
-        st.markdown("### 📈 Volume Over Time")
-        # Ensure date is datetime for charting
-        df['date'] = pd.to_datetime(df['date'])
-        df = df.set_index('date')
         
-        # Plot Buy vs Sell Volume
-        st.bar_chart(df[['b_qty', 's_qty']])
+        # 7. Formatted Output Table
+        st.markdown("### 🗃️ Advanced Ledger Matrix")
         
-        # Raw Data Table
-        st.markdown("### 🗃️ Raw Ledger Matrix")
-        st.dataframe(df, use_container_width=True)
+        # Reorder and format columns for human readability
+        display_df = df[['date', 'b_qty', 'Buy Rate', 'b_amt', 's_qty', 'Sell Rate', 's_amt', 'Net Qty', 'Net Amt', 'Cum Qty', 'Cum Amt']].copy()
+        display_df['date'] = display_df['date'].dt.strftime('%Y-%m-%d')
+        
+        # Make the table fill the container
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
