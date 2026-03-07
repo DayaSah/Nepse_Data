@@ -58,6 +58,29 @@ def fetch_and_clean_data(collection_name):
     
     return df
 
+
+@st.cache_data(ttl=600)
+def fetch_broker_race_data(stock_symbol, valid_collections):
+    """Fetches individual cumulative inventory for every single broker for a specific stock."""
+    if db is None: return pd.DataFrame()
+    target_cols = [c for c in valid_collections if c.split("_")[0] == stock_symbol]
+    
+    all_dfs = []
+    for col in target_cols:
+        broker_id = col.split("_")[1]
+        cursor = db[col].find({}, {"_id": 0, "date": 1, "b_qty": 1, "s_qty": 1})
+        df = pd.DataFrame(list(cursor))
+        if not df.empty:
+            df["Date"] = pd.to_datetime(df["date"], errors='coerce')
+            df["Net_Qty"] = pd.to_numeric(df.get("b_qty", 0)) - pd.to_numeric(df.get("s_qty", 0))
+            df = df.sort_values("Date").reset_index(drop=True)
+            df["Cum_Net_Qty"] = df["Net_Qty"].cumsum()
+            df["Broker"] = f"Broker {broker_id}"
+            all_dfs.append(df[["Date", "Broker", "Cum_Net_Qty", "Net_Qty"]])
+            
+    return pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame()
+
+
 @st.cache_data(ttl=600)
 def fetch_collective_data(stock_symbol, valid_collections):
     """Aggregates data for a stock across ALL brokers in the database."""
@@ -131,13 +154,14 @@ def run():
             df = raw_df.copy()
 
         # --- SETUP 6 MEGA TABS ---
-        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
             "📂 Ledger & Matrix", 
             "🚀 Advanced Metrics", 
             "📊 Optics & Trends", 
             "🐳 Volume & Whales", 
             "🤖 AI Advisor",
-            "🌐 Collective TMS (Market Macro)"
+            "🌐 Collective TMS (Market Macro)",
+            "📦 Broker Inventory Race"
         ])
         
         # ------------------------------------------
@@ -400,3 +424,48 @@ def run():
                     st.plotly_chart(fig_agg3, use_container_width=True)
                 else:
                     st.info("Not enough price variation to plot Macro Volume Profile.")
+
+        with col_tab7:
+                st.markdown("### 🏎️ The Great Broker Accumulation Race")
+                st.markdown("Tracks the cumulative inventory of **every single broker** simultaneously.")
+                st.info("💡 **Pro Tip:** Double-click any broker in the legend to isolate their line, or single-click to turn them off.")
+                
+                race_df = fetch_broker_race_data(selected_stock, valid_collections)
+                
+                if not race_df.empty:
+                    if len(date_range) == 2:
+                        mask = (race_df["Date"].dt.date >= date_range[0]) & (race_df["Date"].dt.date <= date_range[1])
+                        race_df = race_df.loc[mask].copy()
+                    
+                    # Get the final standing of each broker to find the top accumulators/dumpers
+                    final_standings = race_df.groupby("Broker")["Cum_Net_Qty"].last().sort_values(ascending=False)
+                    
+                    # Smart Filter Toggle
+                    show_top_only = st.checkbox("🎯 Show Top 5 Accumulators & Top 5 Dumpers Only (Remove Noise)")
+                    
+                    if show_top_only:
+                        top_brokers = list(final_standings.head(5).index) + list(final_standings.tail(5).index)
+                        plot_df = race_df[race_df["Broker"].isin(top_brokers)]
+                    else:
+                        plot_df = race_df
+                        
+                    # Plot the Spaghetti Chart
+                    fig_race = px.line(
+                        plot_df, x="Date", y="Cum_Net_Qty", color="Broker", 
+                        hover_data=["Net_Qty"],
+                        color_discrete_sequence=px.colors.qualitative.Alphabet
+                    )
+                    fig_race.update_layout(height=650, hovermode="closest", yaxis_title="Cumulative Net Quantity")
+                    # Make lines slightly transparent to handle the noise, unless hovered
+                    fig_race.update_traces(line=dict(width=2), opacity=0.7)
+                    st.plotly_chart(fig_race, use_container_width=True)
+                    
+                    # Mini Leaderboard below the chart
+                    st.markdown("### 🏆 Current Holdings Leaderboard (End of Selected Period)")
+                    ld1, ld2 = st.columns(2)
+                    with ld1:
+                        st.success("**Top 5 Accumulators (Holding the most)**")
+                        st.dataframe(final_standings.head(5), use_container_width=True)
+                    with ld2:
+                        st.error("**Top 5 Dumpers (Sold the most short/cleared out)**")
+                        st.dataframe(final_standings.tail(5), use_container_width=True)
