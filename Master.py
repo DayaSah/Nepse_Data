@@ -1,7 +1,7 @@
 import os
 
 # Configuration: What to ignore so the file doesn't get cluttered with junk or secrets
-IGNORE_DIRS = {'.git', '.streamlit', '__pycache__', 'env', 'venv'}
+IGNORE_DIRS = {'.git', '.streamlit', '__pycache__', 'env', 'venv', 'api5', 'api6', 'api7', 'data'}
 IGNORE_FILES = {'Master_Code.txt', 'Master.py', 'secrets.toml'} 
 ALLOWED_EXTENSIONS = {'.py', '.txt', '.md'} # We only extract actual code/info files
 
