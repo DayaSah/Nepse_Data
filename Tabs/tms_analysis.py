@@ -1,16 +1,26 @@
 import streamlit as st
-import os
+import importlib  # <--- NEW IMPORT
 
 # Import the SubTabs
 try:
     from Tabs.SubTabs import Stock_Hold
-    from Tabs.SubTabs import Visual  # <--- NEW IMPORT
+    from Tabs.SubTabs import Visual
+    
+    # FOR DEVELOPMENT: Force Python to reload the newest version of these files
+    importlib.reload(Stock_Hold)
+    importlib.reload(Visual)
+    
 except ImportError:
     st.error("❌ Failed to load SubTabs. Check your __init__.py files.")
 
 def run():
     st.title("📘 Broker Telemetry (TMS Analysis)")
     st.markdown("Analyze specific TMS data flows and broker inventory.")
+   
+
+# Import the SubTabs
+
+
     
     # Define SubTabs
     tab1, tab2, tab3 = st.tabs([
