@@ -4,7 +4,7 @@ import pandas as pd
 from pymongo import MongoClient
 import requests
 import time
-import cloudscraper
+from datetime import datetime
 
 # --- DATABASE CONNECTION ---
 @st.cache_resource
@@ -18,23 +18,25 @@ def init_connection():
         return None
 
 def run():
-    st.title("💉 Multiversal Data Injector")
-    st.markdown("Inject raw API dumps or auto-fetch data directly into the Quantum Database.")
+    st.title("💉 Multiversal Data Injector (V2)")
+    st.markdown("Inject raw API dumps or auto-fetch data directly into the **Master Matrix**.")
     
     client = init_connection()
+    if not client: return
+
+    db = client["StockHoldingByTMS"]
+    master_col = db["market_trades"]
     
-    # Create the Tabs
     tab1, tab2, tab3 = st.tabs([
         "📡 NepseAlpha Auto-Fetcher", 
-        "📂 Manual File Injector", 
-        "⚙️ API Settings"
+        "📂 Manual JSON Injector", 
+        "⚙️ API Diagnostics"
     ])
     
     with tab1:
         st.header("Automated API Extraction")
-        st.markdown("Directly extract floorsheet data from NepseAlpha without downloading files.")
+        st.markdown("Directly extract floorsheet data and sync with Master Collection.")
         
-        # User Inputs
         col1, col2, col3 = st.columns(3)
         with col1:
             fetch_stock = st.text_input("Stock Symbol (e.g., ULHC):", key="fetch_stock").upper().strip()
@@ -47,214 +49,108 @@ def run():
         if fetch_mode == "Single Broker":
             specific_broker = st.text_input("Enter Broker ID (e.g., 44):").strip()
             
-        if st.button("⚡ Initiate Extraction Protocol"):
+        if st.button("⚡ Initiate Extraction Protocol", type="primary"):
             if not fetch_stock:
                 st.error("❌ Stock Symbol is required.")
                 return
-            if fetch_mode == "Single Broker" and not specific_broker:
-                st.error("❌ Broker ID is required for Single mode.")
-                return
-            if not client:
-                st.error("❌ MongoDB connection is not active.")
-                return
-                
-            db = client["StockHoldingByTMS"]
             
-            # Setup headers to look EXACTLY like a real human browser doing an AJAX request
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Referer": "https://nepsealpha.com/floorsheet-history",
-                "X-Requested-With": "XMLHttpRequest", # <-- THIS IS THE MAGIC KEY
-                "Connection": "keep-alive"
+                "X-Requested-With": "XMLHttpRequest",
+                "Referer": "https://nepsealpha.com/floorsheet-history"
             }
             
-            # Determine which brokers to scan
             brokers_to_scan = [specific_broker] if fetch_mode == "Single Broker" else [str(i) for i in range(1, 100)]
-            
-            st.info(f"Target locked on {fetch_stock}. Initiating extraction...")
+            st.info(f"Target locked on {fetch_stock}. Scanning nodes...")
             
             progress_bar = st.progress(0)
             status_text = st.empty()
-            
-            total_inserted = 0
-            total_updated = 0
-            brokers_found = 0
+            total_processed = 0
             
             for i, broker_id in enumerate(brokers_to_scan):
-                status_text.text(f"Scanning TMS-{broker_id} for {fetch_stock}...")
-                
-                # Generate dynamic fsk timestamp
-                fsk = int(time.time() * 1000)
-                url = f"https://nepsealpha.com/floorsheet-history/filter?fsk=1772847797646&symbol={fetch_stock}&broker={broker_id}&dateRangeType={fetch_range}"
+                status_text.text(f"Scanning TMS-{broker_id}...")
+                url = f"https://nepsealpha.com/floorsheet-history/filter?symbol={fetch_stock}&broker={broker_id}&dateRangeType={fetch_range}"
                 
                 try:
                     response = requests.get(url, headers=headers, timeout=10)
-                    
                     if response.status_code == 200:
-                        try:
-                            json_data = response.json()
-                            records = json_data.get("data", [])
-                            
-                            # If no data exists for this broker, skip quietly
-                            if not records or len(records) == 0:
-                                pass
-                            else:
-                                brokers_found += 1
-                                collection_name = f"{fetch_stock}_{broker_id}"
-                                collection = db[collection_name]
+                        records = response.json().get("data", [])
+                        if records:
+                            # --- V2 SYNC LOGIC ---
+                            for record in records:
+                                date_val = record.get("date")
+                                if not date_val: continue
                                 
-                                # Upsert logic (Merge Database)
-                                for record in records:
-                                    date_val = record.get("date")
-                                    if date_val:
-                                        query = {"date": date_val}
-                                        new_values = {"$set": {
-                                            "b_qty": int(record.get("b_qty", 0)),
-                                            "s_qty": int(record.get("s_qty", 0)),
-                                            "b_amt": float(record.get("b_amt", 0)),
-                                            "s_amt": float(record.get("s_amt", 0))
-                                        }}
-                                        result = collection.update_one(query, new_values, upsert=True)
-                                        if result.matched_count > 0:
-                                            total_updated += 1
-                                        else:
-                                            total_inserted += 1
-                                            
-                        except json.JSONDecodeError:
-                            st.warning(f"Failed to parse JSON for Broker {broker_id}. They might have blocked the IP.")
-                            break # Stop the loop if Cloudflare blocks us
+                                # 1. Prepare standardized document
+                                doc = {
+                                    "stock": fetch_stock,
+                                    "broker": str(broker_id),
+                                    "date": date_val,
+                                    "b_qty": int(record.get("b_qty", 0)),
+                                    "s_qty": int(record.get("s_qty", 0)),
+                                    "b_amt": float(record.get("b_amt", 0)),
+                                    "s_amt": float(record.get("s_amt", 0))
+                                }
+                                
+                                # 2. Upsert into Master Collection (V2 Core)
+                                master_col.update_one(
+                                    {"stock": fetch_stock, "broker": str(broker_id), "date": date_val},
+                                    {"$set": doc},
+                                    upsert=True
+                                )
+                                total_processed += 1
                             
                 except Exception as e:
-                    st.error(f"Connection failed at Broker {broker_id}: {e}")
-                    
-                # Progress Bar
-                progress_bar.progress((i + 1) / len(brokers_to_scan))
+                    st.warning(f"Node {broker_id} connection skipped.")
                 
-                # STEALTH MECHANISM: Pause to avoid IP Ban (Only if scanning all)
-                if fetch_mode == "ALL Brokers (Stealth Scan)" and i < len(brokers_to_scan) - 1:
-                    time.sleep(1.5) # Pauses for 1.5 seconds between each broker
+                progress_bar.progress((i + 1) / len(brokers_to_scan))
+                if fetch_mode == "ALL Brokers (Stealth Scan)": time.sleep(1.0)
                     
-            status_text.text("Extraction Protocol Complete!")
-            st.success(f"✅ Scanning Finished! Found data in {brokers_found} Broker Nodes.")
-            st.markdown(f"- **New Records Inserted:** {total_inserted}")
-            st.markdown(f"- **Existing Records Updated:** {total_updated}")
+            st.success(f"✅ Protocol Finished! {total_processed} snapshots synced to Master Matrix.")
 
     with tab2:
         st.header("📂 Manual JSON Payload Injector")
-        st.markdown("Bypass Cloudflare entirely by pasting the raw JSON response from your browser.")
+        st.markdown("Paste raw JSON from NepseAlpha to bypass all blocks.")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            manual_stock = st.text_input("Stock Symbol (e.g., ADBL):", key="manual_stock").upper().strip()
-        with col2:
-            manual_broker = st.text_input("Broker ID (e.g., 58):", key="manual_broker").strip()
+        colA, colB = st.columns(2)
+        with colA:
+            m_stock = st.text_input("Symbol:", key="m_s").upper().strip()
+        with colB:
+            m_broker = st.text_input("Broker ID:", key="m_b").strip()
             
-        json_payload = st.text_area("Paste the Raw JSON payload here:", height=300, placeholder='{"data": [{"date": "2024-02-15", "b_qty": "100", ...}]}')
+        json_payload = st.text_area("Paste JSON:", height=200)
         
-        if st.button("💉 Inject Payload into Quantum DB"):
-            if not manual_stock or not manual_broker:
-                st.error("❌ Stock Symbol and Broker ID are required.")
+        if st.button("💉 Inject Into Master Matrix"):
+            if not m_stock or not m_broker or not json_payload:
+                st.error("Missing credentials or payload.")
                 return
-            if not json_payload:
-                st.error("❌ Please paste the JSON payload.")
-                return
-            if not client:
-                st.error("❌ MongoDB connection is not active.")
-                return
-                
-            db = client["StockHoldingByTMS"]
-            collection_name = f"{manual_stock}_{manual_broker}"
-            collection = db[collection_name]
             
             try:
-                # Parse the pasted JSON
                 data = json.loads(json_payload)
-                
-                # Check if it has the 'data' key (standard NepseAlpha format)
                 records = data.get("data", [])
-                
-                if not records:
-                    st.warning("⚠️ The JSON payload seems valid but contains no 'data' records.")
-                    return
-                
-                total_inserted = 0
-                total_updated = 0
-                
-                for record in records:
-                    date_val = record.get("date")
-                    if date_val:
-                        query = {"date": date_val}
-                        new_values = {"$set": {
-                            "b_qty": int(record.get("b_qty", 0)),
-                            "s_qty": int(record.get("s_qty", 0)),
-                            "b_amt": float(record.get("b_amt", 0)),
-                            "s_amt": float(record.get("s_amt", 0))
-                        }}
-                        
-                        result = collection.update_one(query, new_values, upsert=True)
-                        if result.matched_count > 0:
-                            total_updated += 1
-                        else:
-                            total_inserted += 1
-                            
-                st.success(f"✅ Injection Successful for {manual_stock} (Broker {manual_broker})!")
-                st.markdown(f"- **New Records Inserted:** {total_inserted}")
-                st.markdown(f"- **Existing Records Updated:** {total_updated}")
-                
-            except json.JSONDecodeError:
-                st.error("🛑 Invalid JSON format. Make sure you pasted the exact raw JSON from the browser.")
+                count = 0
+                for r in records:
+                    date_v = r.get("date")
+                    if date_v:
+                        doc = {
+                            "stock": m_stock, "broker": str(m_broker), "date": date_v,
+                            "b_qty": int(r.get("b_qty", 0)), "s_qty": int(r.get("s_qty", 0)),
+                            "b_amt": float(r.get("b_amt", 0)), "s_amt": float(r.get("s_amt", 0))
+                        }
+                        master_col.update_one(
+                            {"stock": m_stock, "broker": str(m_broker), "date": date_v},
+                            {"$set": doc}, upsert=True
+                        )
+                        count += 1
+                st.success(f"Successfully injected {count} records into Master Matrix.")
             except Exception as e:
-                st.error(f"An error occurred during injection: {e}")
+                st.error(f"Injection Failed: {e}")
+
     with tab3:
-        st.header("🧪 API Diagnostics & Cookie Hijacker")
-        st.markdown("If Cloudflare blocks standard requests, we must inject a verified human session cookie.")
-
-        test_url = st.text_input("Paste Raw API URL here:", placeholder="https://nepsealpha.com/floorsheet-history/filter?fsk=...")
-        
-        st.markdown("---")
-        st.markdown("**How to get the Cookie:**\n1. In the Network tab, click the API request.\n2. Go to **Request Headers** (scroll down).\n3. Find the line that says `cookie: ...`\n4. Right-click, copy the *value*, and paste it below.")
-        
-        cookie_string = st.text_area("Paste Cookie String here (Optional but recommended):", height=100)
-
-        if st.button("🔍 Run Diagnostic Fetch"):
-            if not test_url:
-                st.warning("⚠️ Please paste a URL first.")
-            else:
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                    "Accept": "application/json, text/plain, */*",
-                    "Accept-Language": "en-US,en;q=0.9",
-                    "Referer": "https://nepsealpha.com/floorsheet-history",
-                    "X-Requested-With": "XMLHttpRequest",
-                    "Connection": "keep-alive"
-                }
-                
-                # Inject the hijacked cookie if provided
-                if cookie_string:
-                    headers["Cookie"] = cookie_string.strip()
-
-                st.info("Transmission sent. Waiting for server response...")
-                
-                try:
-                    # We can use standard requests here since the cookie acts as our VIP pass
-                    response = requests.get(test_url, headers=headers, timeout=15)
-
-                    if response.status_code == 200:
-                        st.success(f"Status Code: {response.status_code} (OK - Cloudflare Bypassed!)")
-                    else:
-                        st.error(f"Status Code: {response.status_code} (Blocked/Failed)")
-
-                    st.markdown("### 📦 Raw Response Body")
-                    
-                    try:
-                        json_data = response.json()
-                        st.success("✅ Valid JSON payload received! The Matrix has been breached.")
-                        st.json(json_data)
-                    except json.JSONDecodeError:
-                        st.error("🛑 Response is NOT valid JSON.")
-                        st.text_area("Unmodified Text Output:", response.text, height=400)
-
-                except Exception as e:
-                    st.error(f"Critical Transmission Failure: {e}")
+        st.header("🧪 API Diagnostics")
+        test_url = st.text_input("URL:", placeholder="https://nepsealpha.com/...")
+        if st.button("🔍 Test Connection"):
+            res = requests.get(test_url, headers={"User-Agent": "Mozilla/5.0", "X-Requested-With": "XMLHttpRequest"})
+            st.write(f"Status: {res.status_code}")
+            st.json(res.text[:500])
