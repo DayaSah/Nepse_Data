@@ -126,6 +126,17 @@ def run():
         st.markdown("### 🎯 Price Execution Tracker")
         st.markdown("*Comparing the average prices they bought and sold at on specific days.*")
         
+        import numpy as np
+        
+        # Use numpy's NaN instead of Pandas NA to keep data types strictly numeric for Streamlit
+        price_df = chart_df[['Buy Rate', 'Sell Rate']].replace(0, np.nan).dropna(how='all')
+        
+        # Force the columns to be purely float types to eliminate any mixed-type anomalies
+        price_df['Buy Rate'] = pd.to_numeric(price_df['Buy Rate'], errors='coerce')
+        price_df['Sell Rate'] = pd.to_numeric(price_df['Sell Rate'], errors='coerce')
+
+        st.line_chart(price_df, color=["#17becf", "#e377c2"])
+        
         # Filter out 0 rates for a cleaner line chart
         price_df = chart_df[['Buy Rate', 'Sell Rate']].replace(0, pd.NA).dropna(how='all')
         st.line_chart(price_df, color=["#17becf", "#e377c2"])
