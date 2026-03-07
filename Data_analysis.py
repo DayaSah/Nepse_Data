@@ -5,7 +5,7 @@ import os
 st.set_page_config(page_title="NEPSE Quantum Matrix", page_icon="🌌", layout="wide")
 
 # Import the tab modules (we will create these next)
-from Tabs import dashboard, stock_analysis, tms_analysis, data_injector, stock_graph, predictor
+from Tabs import dashboard, stock_analysis, tms_analysis, data_injector, stock_graph, predictor, Nepse_Terminal
 
 # --- 1. LOGIN SYSTEM ---
 def check_credentials():
