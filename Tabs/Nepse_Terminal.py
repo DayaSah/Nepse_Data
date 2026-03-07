@@ -404,7 +404,7 @@ def run():
             st.subheader(f"🌐 Macro Market View: {stock_symbol}")
             st.markdown(f"Aggregating all TMS broker data to show true market volume and macro support/resistance for **{stock_symbol}**.")
             
-            agg_df = fetch_collective_data(stock_symbol, valid_collections)
+            agg_df = fetch_collective_data(stock_symbol)
             
             if agg_df.empty:
                 st.warning("Could not aggregate market data for this stock.")
