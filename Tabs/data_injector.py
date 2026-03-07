@@ -219,23 +219,6 @@ def run():
                 st.info("Transmission sent. Waiting for server response...")
                 
                 try:
-                    # Fire the request
-                    response = requests.get(test_url, headers=headers, timeout=10)
-
-                    # 1. Show Status Code
-                    if response.status_code == 200:
-                        st.success(f"Status Code: {response.status_code} (OK)")
-                    else:
-                        st.error(f"Status Code: {response.status_code} (Blocked/Failed)")
-
-                    # 2. Show Headers (Helps us see if Cloudflare intercepted it)
-                    st.markdown("### 📡 Response Headers")
-                    st.json(dict(response.headers))
-
-                    # 3. Show the RAW Body
-                    st.markdown("### 📦 Raw Response Body")
-                    
-                    try:
                     # 1. Initialize the Cloudflare Bypass Engine
                     scraper = cloudscraper.create_scraper(
                         browser={
