@@ -14,6 +14,14 @@ def check_credentials():
     # Initialize session state variables if they don't exist
     if "credentials_correct" not in st.session_state:
         st.session_state["credentials_correct"] = False
+        
+    # FIX: Initialize the input fields so Streamlit doesn't throw a KeyError on refresh
+    if "user_input" not in st.session_state:
+        st.session_state["user_input"] = ""
+    if "pass_input" not in st.session_state:
+        st.session_state["pass_input"] = ""
+
+   
 
     def verify_login():
         # Check if the inputs match the secrets
