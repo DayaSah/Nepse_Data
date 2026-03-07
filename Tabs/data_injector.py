@@ -195,4 +195,54 @@ def run():
                     st.error(f"❌ An error occurred: {e}")
 
     with tab3:
-        st.info("API Header and Stealth Settings will be configured here.")
+        st.header("🧪 API Diagnostics & Raw Tester")
+        st.markdown("Paste the exact Request URL from your browser's Network tab to see exactly what the server is returning. We will view the unmodified response.")
+
+        # User inputs the exact URL they copied from the browser
+        test_url = st.text_input("Paste Raw API URL here:", placeholder="https://nepsealpha.com/floorsheet-history/filter?fsk=...")
+
+        if st.button("🔍 Run Diagnostic Fetch"):
+            if not test_url:
+                st.warning("⚠️ Please paste a URL first.")
+            else:
+                # The exact headers we are currently using
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Referer": "https://nepsealpha.com/floorsheet-history",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Connection": "keep-alive"
+                }
+
+                st.info("Transmission sent. Waiting for server response...")
+                
+                try:
+                    # Fire the request
+                    response = requests.get(test_url, headers=headers, timeout=10)
+
+                    # 1. Show Status Code
+                    if response.status_code == 200:
+                        st.success(f"Status Code: {response.status_code} (OK)")
+                    else:
+                        st.error(f"Status Code: {response.status_code} (Blocked/Failed)")
+
+                    # 2. Show Headers (Helps us see if Cloudflare intercepted it)
+                    st.markdown("### 📡 Response Headers")
+                    st.json(dict(response.headers))
+
+                    # 3. Show the RAW Body
+                    st.markdown("### 📦 Raw Response Body")
+                    
+                    try:
+                        # If it is valid JSON, it will format it nicely
+                        json_data = response.json()
+                        st.success("✅ Valid JSON payload received!")
+                        st.json(json_data)
+                    except json.JSONDecodeError:
+                        # IF IT FAILS TO PARSE JSON, THIS WILL REVEAL THE HTML BLOCK PAGE
+                        st.error("🛑 Response is NOT valid JSON. The server returned raw text/HTML.")
+                        st.text_area("Unmodified Text Output:", response.text, height=400)
+
+                except Exception as e:
+                    st.error(f"Critical Transmission Failure: {e}")")
