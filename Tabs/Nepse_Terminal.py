@@ -425,7 +425,7 @@ def run():
                 else:
                     st.info("Not enough price variation to plot Macro Volume Profile.")
 
-        with col_tab7:
+        with tab7:
                 st.markdown("### 🏎️ The Great Broker Accumulation Race")
                 st.markdown("Tracks the cumulative inventory of **every single broker** simultaneously.")
                 st.info("💡 **Pro Tip:** Double-click any broker in the legend to isolate their line, or single-click to turn them off.")
