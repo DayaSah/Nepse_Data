@@ -245,4 +245,4 @@ def run():
                         st.text_area("Unmodified Text Output:", response.text, height=400)
 
                 except Exception as e:
-                    st.error(f"Critical Transmission Failure: {e}")")
+                    st.error(f"Critical Transmission Failure: {e}")
