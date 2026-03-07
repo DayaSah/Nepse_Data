@@ -6,3 +6,4 @@ plotly
 cloudscraper
 google-generativeai
 openai
+requests
