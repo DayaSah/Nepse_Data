@@ -4,3 +4,4 @@ pymongo
 dnspython
 plotly
 cloudscraper
+google-generativeai
