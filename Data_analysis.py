@@ -22,7 +22,8 @@ st.markdown("""
 
 # Import the tab modules
 from Tabs import (
-    dashboard, 
+    dashboard,
+    Stock_Price_Volume,
     stock_analysis, 
     tms_analysis, 
     data_injector, 
@@ -83,6 +84,7 @@ if check_credentials():
     # Navigation Matrix
     tabs = {
         "📊 Command Dashboard": dashboard,
+        "Stock Price & Volume": Stock_Price_Volume,
         "📈 Stock Scanner": stock_analysis,
         "📘 TMS Intelligence": tms_analysis,
         "📉 Technical Terminal": stock_graph,
