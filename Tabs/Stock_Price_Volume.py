@@ -101,74 +101,74 @@ def run():
         st.subheader("Inject TradingView Chart Data")
         st.markdown("""
         Upload your raw **JSON/TXT file** (like `temp_data - Copy.txt`) containing the TradingView data.
-        *Uploading a file bypasses browser limits and processes instantly.*
         """)
 
-        # Inputs
-        stock_name = st.text_input("Enter Stock Symbol (e.g., NHPC):", "").strip().upper()
-        
-        # USE A FILE UPLOADER INSTEAD OF A TEXT AREA
-        uploaded_file = st.file_uploader("Upload your data file (TXT or JSON)", type=["txt", "json"])
-
-        # The Button Action
-        if st.button("Convert & Inject Data", type="primary"):
+        # 🔒 Wrap everything in an st.form to prevent Streamlit from dropping the button click
+        with st.form("data_injector_form"):
+            stock_name = st.text_input("Enter Stock Symbol (e.g., NHPC):", "").strip().upper()
             
-            # 1. Validate inputs immediately
+            uploaded_file = st.file_uploader("Upload your data file (TXT or JSON)", type=["txt", "json"])
+
+            # The Submit Button MUST be inside the form
+            submit_button = st.form_submit_button("Convert & Inject Data", type="primary")
+
+        # Process exactly when the form is submitted
+        if submit_button:
             if not stock_name:
                 st.error("⚠️ Please enter the Stock Symbol first!")
-                st.stop()
-            if uploaded_file is None:
+            elif uploaded_file is None:
                 st.error("⚠️ Please upload a file first!")
-                st.stop()
-
-            # 2. Process data
-            with st.spinner(f"Reading file and processing data for {stock_name}..."):
-                try:
-                    import json
-                    from pymongo import UpdateOne
-                    
-                    # Read the file directly into memory
-                    file_content = uploaded_file.read().decode("utf-8")
-                    data = json.loads(file_content)
-                    
-                    if "t" not in data or "c" not in data or "v" not in data:
-                        st.error("❌ Invalid JSON format! Missing 't', 'c', or 'v' arrays.")
-                        st.stop()
-                    
-                    # Create DataFrame (converting timestamps directly)
-                    dates = [pd.to_datetime(ts, unit='s').strftime('%Y-%m-%d') for ts in data["t"]]
-                    
-                    df_new = pd.DataFrame({
-                        "Date": dates,
-                        "Stock": stock_name,
-                        "Open": data.get("o", [0] * len(dates)),
-                        "High": data.get("h", [0] * len(dates)),
-                        "Low": data.get("l", [0] * len(dates)),
-                        "Close": data["c"],
-                        "Volume": data["v"]
-                    })
-                    
-                    records_to_insert = df_new.to_dict('records')
-                    
-                    if db is not None and records_to_insert:
-                        # Batch operations
-                        operations = [
-                            UpdateOne(
-                                {"Date": r["Date"], "Stock": r["Stock"]},
-                                {"$set": r},
-                                upsert=True
-                            ) for r in records_to_insert
-                        ]
+            elif db is None:
+                st.error("❌ Database connection failed. Please check your MONGO_URI.")
+            else:
+                with st.spinner(f"Reading file and processing data for {stock_name}..."):
+                    try:
+                        import json
+                        from pymongo import UpdateOne
                         
-                        result = db[COLLECTION_NAME].bulk_write(operations)
+                        # Read the file directly into memory
+                        file_content = uploaded_file.read().decode("utf-8")
+                        data = json.loads(file_content)
                         
-                        st.success(f"✅ Successfully processed {len(records_to_insert)} days of market data for {stock_name}!")
-                        st.info(f"Inserted: {result.upserted_count} | Updated: {result.modified_count}")
-                        
-                        # Show a preview
-                        st.dataframe(df_new.head(10))
-                        
-                except json.JSONDecodeError:
-                    st.error("❌ Failed to parse file. Make sure it contains clean JSON data.")
-                except Exception as e:
-                    st.error(f"❌ An error occurred: {e}")
+                        if "t" not in data or "c" not in data or "v" not in data:
+                            st.error("❌ Invalid JSON format! Missing 't', 'c', or 'v' arrays.")
+                        else:
+                            # Create DataFrame (converting timestamps directly)
+                            dates = [pd.to_datetime(ts, unit='s').strftime('%Y-%m-%d') for ts in data["t"]]
+                            
+                            df_new = pd.DataFrame({
+                                "Date": dates,
+                                "Stock": stock_name,
+                                "Open": data.get("o", [0] * len(dates)),
+                                "High": data.get("h", [0] * len(dates)),
+                                "Low": data.get("l", [0] * len(dates)),
+                                "Close": data["c"],
+                                "Volume": data["v"]
+                            })
+                            
+                            records_to_insert = df_new.to_dict('records')
+                            
+                            if records_to_insert:
+                                # Batch operations
+                                operations = [
+                                    UpdateOne(
+                                        {"Date": r["Date"], "Stock": r["Stock"]},
+                                        {"$set": r},
+                                        upsert=True
+                                    ) for r in records_to_insert
+                                ]
+                                
+                                result = db[COLLECTION_NAME].bulk_write(operations)
+                                
+                                st.success(f"✅ Successfully processed {len(records_to_insert)} days of market data for {stock_name}!")
+                                st.info(f"Inserted: {result.upserted_count} | Updated: {result.modified_count}")
+                                
+                                # Show a preview
+                                st.dataframe(df_new.head(10))
+                            else:
+                                st.warning("No data found to insert.")
+                                
+                    except json.JSONDecodeError:
+                        st.error("❌ Failed to parse file. Make sure it contains clean JSON data.")
+                    except Exception as e:
+                        st.error(f"❌ An error occurred: {e}")
