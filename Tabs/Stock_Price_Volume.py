@@ -8,7 +8,7 @@ import json
 
 # --- SECURE DATABASE SETUP ---
 try:
-    MONGO_URI = st.secrets[uri"]
+    MONGO_URI = st.secrets["uri"]
 except Exception:
     MONGO_URI = os.getenv("MONGO_URI", "")
 
