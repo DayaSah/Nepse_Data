@@ -8,9 +8,9 @@ import json
 
 # --- SECURE DATABASE SETUP ---
 try:
-    MONGO_URI = st.secrets["MONGO_URI"]
+    MONGO_URI = st.secrets[uri"]
 except Exception:
-    uri = os.getenv("MONGO_URI", "")
+    MONGO_URI = os.getenv("MONGO_URI", "")
 
 COLLECTION_NAME = "Stock_Price_Volume"
 
