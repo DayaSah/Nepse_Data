@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from pymongo import MongoClient
 import os
 import json
@@ -47,10 +48,10 @@ def run():
     tab_graph, tab_injector = st.tabs(["📉 Price & Volume Graph", "💉 Data Injector"])
 
     # ==========================================
-    # SUB-TAB 1: GRAPH VISUALIZATION
+    # SUB-TAB 1: GRAPH VISUALIZATION (TRADINGVIEW STYLE)
     # ==========================================
     with tab_graph:
-        st.subheader("Interactive Price & Volume Analysis")
+        st.subheader("Interactive Candlestick & Volume Analysis")
         
         if db is not None:
             records = list(db[COLLECTION_NAME].find({}, {"_id": 0}))
@@ -65,40 +66,63 @@ def run():
                 
                 stock_df = df[df['Stock'] == selected_stock]
                 
-                fig = go.Figure()
+                # Create subplots: 2 rows (Top for Price, Bottom for Volume)
+                fig = make_subplots(
+                    rows=2, cols=1, 
+                    shared_xaxes=True, 
+                    vertical_spacing=0.03, 
+                    row_heights=[0.8, 0.2], # 80% price, 20% volume
+                )
 
-                # Add Volume
+                # 1. Add Candlestick (TradingView Colors)
+                fig.add_trace(
+                    go.Candlestick(
+                        x=stock_df['Date'],
+                        open=stock_df['Open'],
+                        high=stock_df['High'],
+                        low=stock_df['Low'],
+                        close=stock_df['Close'],
+                        name="Price",
+                        increasing_line_color='#26a69a', # TradingView Green
+                        decreasing_line_color='#ef5350'  # TradingView Red
+                    ),
+                    row=1, col=1
+                )
+
+                # Determine colors for volume bars (Green if Close >= Open, else Red)
+                volume_colors = ['#26a69a' if row['Close'] >= row['Open'] else '#ef5350' for index, row in stock_df.iterrows()]
+
+                # 2. Add Volume Bar Chart
                 fig.add_trace(
                     go.Bar(
                         x=stock_df['Date'],
                         y=stock_df['Volume'],
                         name="Volume",
-                        marker_color='rgba(158, 202, 225, 0.6)',
-                        yaxis='y2'
-                    )
+                        marker_color=volume_colors
+                    ),
+                    row=2, col=1
                 )
 
-                # Add Price
-                fig.add_trace(
-                    go.Scatter(
-                        x=stock_df['Date'],
-                        y=stock_df['Close'],
-                        name="Closing Price",
-                        mode='lines+markers',
-                        line=dict(color='orange', width=2),
-                        marker=dict(size=6)
-                    )
-                )
-
+                # Layout formatting for clean TradingView look
                 fig.update_layout(
-                    title=f"{selected_stock} - Price vs Volume Over Time",
-                    xaxis=dict(title="Date"),
-                    yaxis=dict(title="Closing Price (Rs)", side="left", showgrid=False),
-                    yaxis2=dict(title="Volume", side="right", overlaying="y", showgrid=False),
-                    legend=dict(x=0.01, y=0.99),
-                    height=500
+                    title=f"{selected_stock} - Advanced Chart",
+                    yaxis_title="Price (Rs)",
+                    yaxis2_title="Volume",
+                    xaxis_rangeslider_visible=False, # Hides the bulky default slider for pure mouse zooming
+                    height=650,
+                    margin=dict(l=20, r=20, t=50, b=20),
+                    showlegend=False,
+                    dragmode="zoom" # Default mouse behavior
                 )
                 
+                # Hide NEPSE weekends (Friday & Saturday) from the chart to prevent empty gaps
+                fig.update_xaxes(
+                    rangebreaks=[
+                        dict(bounds=["fri", "sun"]) 
+                    ]
+                )
+                
+                # Render the chart
                 st.plotly_chart(fig, use_container_width=True)
                 
                 with st.expander("View Raw Data"):
