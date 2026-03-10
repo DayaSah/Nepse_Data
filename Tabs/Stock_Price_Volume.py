@@ -110,60 +110,54 @@ def run():
                 st.info("No data found in the database. Use the 'Data Injector' tab to add some.")
 
     # ==========================================
-    # SUB-TAB 2: DATA INJECTOR
+    # SUB-TAB 2: DATA INJECTOR (JSON & CSV)
     # ==========================================
     with tab_injector:
-        st.subheader("Inject Bulk Data via Copy-Paste")
+        st.subheader("Inject TradingView Chart Data")
         st.markdown("""
-        **Format required:** Paste tab-separated or comma-separated data. 
-        It must include these columns: `Date`, `Stock`, `Close`, `Volume`.
-        *Example:*
-        ```
-        Date,Stock,Close,Volume
-        2024-03-10,NHPC,245.50,150000
-        2024-03-11,NHPC,248.00,180000
-        ```
+        Paste the raw **JSON** data from NepseAlpha/TradingView (containing `"t"`, `"c"`, `"v"` arrays). 
+        The system will automatically convert the timestamps to dates!
         """)
 
-        pasted_data = st.text_area("Paste your data here:", height=250)
+        # Ask for the Stock Name before injecting
+        stock_name = st.text_input("Enter Stock Symbol for this data (e.g., NHPC, ULHC):", "").strip().upper()
+        
+        pasted_data = st.text_area("Paste Raw JSON Data here:", height=250)
 
-        if st.button("Inject Data into MongoDB"):
-            if pasted_data.strip() == "":
-                st.warning("Please paste some data first.")
+        if st.button("Convert & Inject Data"):
+            if not stock_name:
+                st.warning("⚠️ Please enter the Stock Symbol first!")
+            elif not pasted_data.strip():
+                st.warning("⚠️ Please paste the JSON data.")
             else:
                 try:
-                    from io import StringIO
+                    import json
+                    from pymongo import UpdateOne
                     
-                    # Detect if it's tab separated (like from Excel) or comma separated
-                    separator = '\t' if '\t' in pasted_data else ','
+                    # 1. Parse the JSON text
+                    data = json.loads(pasted_data)
                     
-                    # Read the pasted text into a pandas DataFrame
-                    df_new = pd.read_csv(StringIO(pasted_data), sep=separator)
-                    
-                    # Clean up column names (strip whitespace)
-                    df_new.columns = df_new.columns.str.strip()
-                    
-                    # Verify required columns exist
-                    required_cols = ['Date', 'Stock', 'Close', 'Volume']
-                    missing_cols = [col for col in required_cols if col not in df_new.columns]
-                    
-                    if missing_cols:
-                        st.error(f"Missing required columns: {', '.join(missing_cols)}")
+                    # 2. Extract the arrays
+                    if "t" not in data or "c" not in data or "v" not in data:
+                        st.error("❌ Invalid JSON format! The data must contain 't' (time), 'c' (close), and 'v' (volume) arrays.")
                     else:
-                        # Clean the data before injecting
-                        df_new['Date'] = pd.to_datetime(df_new['Date']).dt.strftime('%Y-%m-%d')
-                        df_new['Stock'] = df_new['Stock'].astype(str).str.strip().str.upper()
-                        df_new['Close'] = pd.to_numeric(df_new['Close'], errors='coerce')
-                        df_new['Volume'] = pd.to_numeric(df_new['Volume'], errors='coerce')
+                        # 3. Use Pandas to convert everything instantly
+                        df_new = pd.DataFrame({
+                            # Convert Unix timestamps to YYYY-MM-DD
+                            "Date": pd.to_datetime(data["t"], unit='s').dt.strftime('%Y-%m-%d'),
+                            "Stock": stock_name,
+                            "Open": data.get("o", [0] * len(data["t"])),
+                            "High": data.get("h", [0] * len(data["t"])),
+                            "Low": data.get("l", [0] * len(data["t"])),
+                            "Close": data["c"],
+                            "Volume": data["v"]
+                        })
                         
-                        # Drop any rows where parsing failed
-                        df_new = df_new.dropna(subset=['Date', 'Stock', 'Close', 'Volume'])
-                        
+                        # 4. Prepare for MongoDB
                         records_to_insert = df_new.to_dict('records')
                         
                         if db is not None and records_to_insert:
-                            # Use bulk upsert to avoid duplicates based on Date and Stock
-                            from pymongo import UpdateOne
+                            # Use bulk upsert to prevent duplicating data if you paste the same thing twice
                             operations = [
                                 UpdateOne(
                                     {"Date": r["Date"], "Stock": r["Stock"]},
@@ -174,11 +168,13 @@ def run():
                             
                             result = db[COLLECTION_NAME].bulk_write(operations)
                             
-                            st.success(f"✅ Successfully processed {len(records_to_insert)} records!")
+                            st.success(f"✅ Successfully processed {len(records_to_insert)} days of market data for {stock_name}!")
                             st.info(f"Inserted: {result.upserted_count} | Updated: {result.modified_count}")
                             
-                            # Give a little preview of what was saved
-                            st.dataframe(df_new.head())
+                            # Show a preview of the clean data it just injected
+                            st.dataframe(df_new.head(10))
                             
+                except json.JSONDecodeError:
+                    st.error("❌ Failed to parse JSON. Please make sure you copied the entire `{ ... }` block properly.")
                 except Exception as e:
-                    st.error(f"Error parsing data. Please ensure it matches the correct format. Details: {e}")
+                    st.error(f"❌ An error occurred: {e}")
