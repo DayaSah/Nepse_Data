@@ -4,9 +4,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pymongo import MongoClient
 import os
+import json
 
 # --- SECURE DATABASE SETUP ---
-# It will check Streamlit Secrets first, and fallback to OS Environment Variables
 try:
     MONGO_URI = st.secrets["MONGO_URI"]
 except Exception:
@@ -41,25 +41,21 @@ def run():
         st.subheader("Interactive Price & Volume Analysis")
         
         if db is not None:
-            # Fetch available stocks from the database
             records = list(db[COLLECTION_NAME].find({}, {"_id": 0}))
             
             if records:
                 df = pd.DataFrame(records)
-                # Ensure date is a datetime object and sort it
                 df['Date'] = pd.to_datetime(df['Date'])
                 df = df.sort_values('Date')
                 
                 available_stocks = df['Stock'].unique()
                 selected_stock = st.selectbox("Select a Stock to Analyze:", available_stocks)
                 
-                # Filter data for the selected stock
                 stock_df = df[df['Stock'] == selected_stock]
                 
-                # Create a dual-axis chart (Price as Line, Volume as Bar)
                 fig = go.Figure()
 
-                # Add Volume (Bar Chart) - Assigned to secondary Y-axis
+                # Add Volume
                 fig.add_trace(
                     go.Bar(
                         x=stock_df['Date'],
@@ -70,7 +66,7 @@ def run():
                     )
                 )
 
-                # Add Price (Line Chart)
+                # Add Price
                 fig.add_trace(
                     go.Scatter(
                         x=stock_df['Date'],
@@ -82,35 +78,24 @@ def run():
                     )
                 )
 
-                # Layout for dual-axis
                 fig.update_layout(
                     title=f"{selected_stock} - Price vs Volume Over Time",
                     xaxis=dict(title="Date"),
-                    yaxis=dict(
-                        title="Closing Price (Rs)",
-                        side="left",
-                        showgrid=False
-                    ),
-                    yaxis2=dict(
-                        title="Volume",
-                        side="right",
-                        overlaying="y",
-                        showgrid=False
-                    ),
+                    yaxis=dict(title="Closing Price (Rs)", side="left", showgrid=False),
+                    yaxis2=dict(title="Volume", side="right", overlaying="y", showgrid=False),
                     legend=dict(x=0.01, y=0.99),
                     height=500
                 )
                 
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Show raw data below the graph
                 with st.expander("View Raw Data"):
                     st.dataframe(stock_df.sort_values("Date", ascending=False).reset_index(drop=True))
             else:
                 st.info("No data found in the database. Use the 'Data Injector' tab to add some.")
 
     # ==========================================
-    # SUB-TAB 2: DATA INJECTOR (JSON & CSV)
+    # SUB-TAB 2: DATA INJECTOR (JSON)
     # ==========================================
     with tab_injector:
         st.subheader("Inject TradingView Chart Data")
@@ -119,62 +104,64 @@ def run():
         The system will automatically convert the timestamps to dates!
         """)
 
-        # Ask for the Stock Name before injecting
-        stock_name = st.text_input("Enter Stock Symbol for this data (e.g., NHPC, ULHC):", "").strip().upper()
-        
-        pasted_data = st.text_area("Paste Raw JSON Data here:", height=250)
+        # Inputs
+        stock_name = st.text_input("Enter Stock Symbol (e.g., NHPC):", "").strip().upper()
+        pasted_data = st.text_area("Paste Raw JSON Data here:", height=200)
 
-        if st.button("Convert & Inject Data"):
+        # The Button Action
+        if st.button("Convert & Inject Data", type="primary"):
+            
+            # 1. Validate inputs immediately
             if not stock_name:
-                st.warning("⚠️ Please enter the Stock Symbol first!")
-            elif not pasted_data.strip():
-                st.warning("⚠️ Please paste the JSON data.")
-            else:
+                st.error("⚠️ Please enter the Stock Symbol first!")
+                st.stop()
+            if not pasted_data.strip():
+                st.error("⚠️ Please paste the JSON data.")
+                st.stop()
+
+            # 2. Process data inside a spinner (keeps Streamlit from timing out)
+            with st.spinner(f"Processing data for {stock_name}..."):
                 try:
-                    import json
                     from pymongo import UpdateOne
                     
-                    # 1. Parse the JSON text
                     data = json.loads(pasted_data)
                     
-                    # 2. Extract the arrays
                     if "t" not in data or "c" not in data or "v" not in data:
-                        st.error("❌ Invalid JSON format! The data must contain 't' (time), 'c' (close), and 'v' (volume) arrays.")
-                    else:
-                        # 3. Use Pandas to convert everything instantly
-                        df_new = pd.DataFrame({
-                            # Convert Unix timestamps to YYYY-MM-DD
-                            "Date": pd.to_datetime(data["t"], unit='s').strftime('%Y-%m-%d'),
-                            "Stock": stock_name,
-                            "Open": data.get("o", [0] * len(data["t"])),
-                            "High": data.get("h", [0] * len(data["t"])),
-                            "Low": data.get("l", [0] * len(data["t"])),
-                            "Close": data["c"],
-                            "Volume": data["v"]
-                        })
+                        st.error("❌ Invalid JSON format! Missing 't', 'c', or 'v' arrays.")
+                        st.stop()
+                    
+                    # Create DataFrame (converting timestamps directly)
+                    dates = [pd.to_datetime(ts, unit='s').strftime('%Y-%m-%d') for ts in data["t"]]
+                    
+                    df_new = pd.DataFrame({
+                        "Date": dates,
+                        "Stock": stock_name,
+                        "Open": data.get("o", [0] * len(dates)),
+                        "High": data.get("h", [0] * len(dates)),
+                        "Low": data.get("l", [0] * len(dates)),
+                        "Close": data["c"],
+                        "Volume": data["v"]
+                    })
+                    
+                    records_to_insert = df_new.to_dict('records')
+                    
+                    if db is not None and records_to_insert:
+                        # Batch operations
+                        operations = [
+                            UpdateOne(
+                                {"Date": r["Date"], "Stock": r["Stock"]},
+                                {"$set": r},
+                                upsert=True
+                            ) for r in records_to_insert
+                        ]
                         
-                        # 4. Prepare for MongoDB
-                        records_to_insert = df_new.to_dict('records')
+                        result = db[COLLECTION_NAME].bulk_write(operations)
                         
-                        if db is not None and records_to_insert:
-                            # Use bulk upsert to prevent duplicating data if you paste the same thing twice
-                            operations = [
-                                UpdateOne(
-                                    {"Date": r["Date"], "Stock": r["Stock"]},
-                                    {"$set": r},
-                                    upsert=True
-                                ) for r in records_to_insert
-                            ]
-                            
-                            result = db[COLLECTION_NAME].bulk_write(operations)
-                            
-                            st.success(f"✅ Successfully processed {len(records_to_insert)} days of market data for {stock_name}!")
-                            st.info(f"Inserted: {result.upserted_count} | Updated: {result.modified_count}")
-                            
-                            # Show a preview of the clean data it just injected
-                            st.dataframe(df_new.head(10))
-                            
+                        st.success(f"✅ Successfully processed {len(records_to_insert)} days of market data for {stock_name}!")
+                        st.info(f"Inserted: {result.upserted_count} | Updated: {result.modified_count}")
+                        st.dataframe(df_new.head(10))
+                        
                 except json.JSONDecodeError:
-                    st.error("❌ Failed to parse JSON. Please make sure you copied the entire `{ ... }` block properly.")
+                    st.error("❌ Failed to parse JSON. Make sure you copied the entire `{ ... }` block.")
                 except Exception as e:
                     st.error(f"❌ An error occurred: {e}")
