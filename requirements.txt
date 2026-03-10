@@ -7,3 +7,4 @@ cloudscraper
 google-generativeai
 openai
 requests
+playwright-stealth
