@@ -144,7 +144,7 @@ def run():
                         # 3. Use Pandas to convert everything instantly
                         df_new = pd.DataFrame({
                             # Convert Unix timestamps to YYYY-MM-DD
-                            "Date": pd.to_datetime(data["t"], unit='s').dt.strftime('%Y-%m-%d'),
+                            "Date": pd.to_datetime(data["t"], unit='s').strftime('%Y-%m-%d'),
                             "Stock": stock_name,
                             "Open": data.get("o", [0] * len(data["t"])),
                             "High": data.get("h", [0] * len(data["t"])),
