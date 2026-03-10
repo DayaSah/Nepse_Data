@@ -95,18 +95,20 @@ def run():
                 st.info("No data found in the database. Use the 'Data Injector' tab to add some.")
 
     # ==========================================
-    # SUB-TAB 2: DATA INJECTOR (JSON)
+    # SUB-TAB 2: DATA INJECTOR (JSON FILE UPLOAD)
     # ==========================================
     with tab_injector:
         st.subheader("Inject TradingView Chart Data")
         st.markdown("""
-        Paste the raw **JSON** data from NepseAlpha/TradingView (containing `"t"`, `"c"`, `"v"` arrays). 
-        The system will automatically convert the timestamps to dates!
+        Upload your raw **JSON/TXT file** (like `temp_data - Copy.txt`) containing the TradingView data.
+        *Uploading a file bypasses browser limits and processes instantly.*
         """)
 
         # Inputs
         stock_name = st.text_input("Enter Stock Symbol (e.g., NHPC):", "").strip().upper()
-        pasted_data = st.text_area("Paste Raw JSON Data here:", height=200)
+        
+        # USE A FILE UPLOADER INSTEAD OF A TEXT AREA
+        uploaded_file = st.file_uploader("Upload your data file (TXT or JSON)", type=["txt", "json"])
 
         # The Button Action
         if st.button("Convert & Inject Data", type="primary"):
@@ -115,16 +117,19 @@ def run():
             if not stock_name:
                 st.error("⚠️ Please enter the Stock Symbol first!")
                 st.stop()
-            if not pasted_data.strip():
-                st.error("⚠️ Please paste the JSON data.")
+            if uploaded_file is None:
+                st.error("⚠️ Please upload a file first!")
                 st.stop()
 
-            # 2. Process data inside a spinner (keeps Streamlit from timing out)
-            with st.spinner(f"Processing data for {stock_name}..."):
+            # 2. Process data
+            with st.spinner(f"Reading file and processing data for {stock_name}..."):
                 try:
+                    import json
                     from pymongo import UpdateOne
                     
-                    data = json.loads(pasted_data)
+                    # Read the file directly into memory
+                    file_content = uploaded_file.read().decode("utf-8")
+                    data = json.loads(file_content)
                     
                     if "t" not in data or "c" not in data or "v" not in data:
                         st.error("❌ Invalid JSON format! Missing 't', 'c', or 'v' arrays.")
@@ -159,9 +164,11 @@ def run():
                         
                         st.success(f"✅ Successfully processed {len(records_to_insert)} days of market data for {stock_name}!")
                         st.info(f"Inserted: {result.upserted_count} | Updated: {result.modified_count}")
+                        
+                        # Show a preview
                         st.dataframe(df_new.head(10))
                         
                 except json.JSONDecodeError:
-                    st.error("❌ Failed to parse JSON. Make sure you copied the entire `{ ... }` block.")
+                    st.error("❌ Failed to parse file. Make sure it contains clean JSON data.")
                 except Exception as e:
                     st.error(f"❌ An error occurred: {e}")
