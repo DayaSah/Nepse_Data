@@ -6,24 +6,36 @@ from pymongo import MongoClient
 import os
 import json
 
-# --- SECURE DATABASE SETUP ---
-try:
-    MONGO_URI = st.secrets["mongo"]["uri"] 
-except Exception:
-    MONGO_URI = os.getenv("MONGO_URI", "")
+# --- ULTRA-RESILIENT DATABASE SETUP ---
+def get_mongo_uri():
+    try:
+        # Check if it is under the [mongo] section in secrets.toml
+        if "mongo" in st.secrets and "uri" in st.secrets["mongo"]:
+            return st.secrets["mongo"]["uri"]
+        # Check if it is just a plain MONGO_URI in secrets.toml
+        elif "MONGO_URI" in st.secrets:
+            return st.secrets["MONGO_URI"]
+    except Exception:
+        pass
+    
+    # Fallback to system environment variable
+    return os.getenv("MONGO_URI", "")
 
+MONGO_URI = get_mongo_uri()
 COLLECTION_NAME = "Stock_Price_Volume"
 
 @st.cache_resource
 def get_db():
     if not MONGO_URI:
-        st.error("⚠️ MONGO_URI not found! Please set it in `.streamlit/secrets.toml` or as an environment variable.")
+        st.error("⚠️ MONGO_URI is empty! Streamlit cannot find your password.")
         return None
     try:
         client = MongoClient(MONGO_URI)
+        # Test the connection to force an error if it fails
+        client.admin.command('ping')
         return client["StockHoldingByTMS"]
     except Exception as e:
-        st.error(f"Database Connection Error: {e}")
+        st.error(f"❌ Connection Error Details: {e}")
         return None
 
 db = get_db()
