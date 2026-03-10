@@ -7,7 +7,7 @@ from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 import pandas as pd
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
+from playwright_stealth import Stealth
 from pymongo import MongoClient
 
 # --- CONFIGURATION & SECRETS ---
@@ -162,7 +162,7 @@ async def run_automation():
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
             )
             page = await context.new_page()
-            await stealth_async(page) # Activate anti-bot cloaking
+            await Stealth().apply_page(page) # Activate anti-bot cloaking
             
             page.on("response", global_network_radar)
 
