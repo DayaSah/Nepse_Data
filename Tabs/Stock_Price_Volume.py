@@ -28,7 +28,7 @@ def get_db():
 
 db = get_db()
 
-def show_stock_price_tab():
+def run():
     st.title("📈 Stock Price & Volume Matrix")
     
     # Create the two sub-tabs
