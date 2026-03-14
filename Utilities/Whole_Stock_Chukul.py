@@ -1,5 +1,4 @@
 import os
-import json
 import asyncio
 import aiohttp
 import requests
@@ -37,11 +36,11 @@ class HeadlessFetcher:
         except: pass
 
     def get_start_date(self, symbol):
-        # We look for the oldest date in your DB
+        # Finds the oldest date in your Price collection
         first_record = self.price_collection.find_one({"Stock": symbol}, sort=[("Date", 1)])
         if first_record and "Date" in first_record:
             return first_record["Date"]
-        return "2024-01-01" # Start from 2024 if not found for testing speed
+        return "2024-01-01" # Fallback if no history found
 
     async def fetch_day(self, session, symbol, date_str, sem):
         url_buy = f"https://chukul.com/api/data/top-buy/?symbol={symbol}&from_date={date_str}&to_date={date_str}"
@@ -49,6 +48,7 @@ class HeadlessFetcher:
         
         async with sem:
             try:
+                # Use a single session to fetch both buy and sell data for the day
                 async with session.get(url_buy, headers=self.headers, timeout=10) as r_buy, \
                            session.get(url_sell, headers=self.headers, timeout=10) as r_sell:
                     
@@ -57,97 +57,105 @@ class HeadlessFetcher:
 
                     daily_brokers = {}
 
-                    # --- ENHANCED PARSING LOGIC ---
-                    def get_list(data):
-                        if isinstance(data, list): return data
-                        if isinstance(data, dict):
-                            # Chukul sometimes nests data under "data" or "results"
-                            return data.get("data", data.get("results", []))
-                        return []
+                    # 1. PROCESS BUYS (Uses 'buyer', 'quantity', 'amount')
+                    if isinstance(buy_json, list):
+                        for r in buy_json:
+                            b_id = str(r.get("buyer") or r.get("broker") or "").strip()
+                            if not b_id or b_id == "0": continue
+                            
+                            qty = int(float(r.get("quantity") or r.get("buyQty") or 0))
+                            amt = float(r.get("amount") or r.get("buyAmount") or 0.0)
+                            
+                            if qty > 0:
+                                daily_brokers[b_id] = {"broker": b_id, "b_qty": qty, "b_amt": amt, "s_qty": 0, "s_amt": 0.0}
 
-                    # Process Buys
-                    for r in get_list(buy_json):
-                        # Chukul keys can vary: 'broker', 'broker_id', or 'brokerNum'
-                        b_id = str(r.get("broker") or r.get("broker_id") or "")
-                        if not b_id or b_id.lower() == "none": continue
-                        
-                        qty = int(float(r.get("buyQty") or r.get("quantity") or 0))
-                        amt = float(r.get("buyAmount") or r.get("amount") or 0.0)
-                        
-                        if qty > 0:
-                            daily_brokers[b_id] = {"broker": b_id, "b_qty": qty, "b_amt": amt, "s_qty": 0, "s_amt": 0.0}
+                    # 2. PROCESS SELLS (Uses 'seller', 'quantity', 'amount')
+                    if isinstance(sell_json, list):
+                        for r in sell_json:
+                            b_id = str(r.get("seller") or r.get("broker") or "").strip()
+                            if not b_id or b_id == "0": continue
+                            
+                            qty = int(float(r.get("quantity") or r.get("sellQty") or 0))
+                            amt = float(r.get("amount") or r.get("sellAmount") or 0.0)
 
-                    # Process Sells
-                    for r in get_list(sell_json):
-                        b_id = str(r.get("broker") or r.get("broker_id") or "")
-                        if not b_id or b_id.lower() == "none": continue
-                        
-                        qty = int(float(r.get("sellQty") or r.get("quantity") or 0))
-                        amt = float(r.get("sellAmount") or r.get("amount") or 0.0)
-
-                        if qty > 0:
-                            if b_id not in daily_brokers:
-                                daily_brokers[b_id] = {"broker": b_id, "b_qty": 0, "b_amt": 0.0, "s_qty": qty, "s_amt": amt}
-                            else:
-                                daily_brokers[b_id]["s_qty"] = qty
-                                daily_brokers[b_id]["s_amt"] = amt
+                            if qty > 0:
+                                if b_id not in daily_brokers:
+                                    daily_brokers[b_id] = {"broker": b_id, "b_qty": 0, "b_amt": 0.0, "s_qty": qty, "s_amt": amt}
+                                else:
+                                    daily_brokers[b_id]["s_qty"] = qty
+                                    daily_brokers[b_id]["s_amt"] = amt
 
                     return date_str, list(daily_brokers.values())
-            except:
+            except Exception:
                 return date_str, []
 
     async def run_sync(self):
         start_time = datetime.now()
-        self.send_telegram("🚀 *SGHC Test Sync Started*")
+        target_symbol = "SGHC" # FETCH ONLY SGHC FOR NOW
+        self.send_telegram(f"🚀 *SGHC Deep Sync Started*")
 
         try:
-            symbol = "SGHC"
-            sem = asyncio.Semaphore(15) 
+            sem = asyncio.Semaphore(20) # Speed: 20 parallel connections
             
             async with aiohttp.ClientSession() as session:
-                start_date_str = self.get_start_date(symbol)
+                start_date_str = self.get_start_date(target_symbol)
                 current = datetime.strptime(start_date_str, "%Y-%m-%d")
                 today = datetime.now()
                 
                 dates = []
                 while current <= today:
-                    if current.weekday() < 5: dates.append(current.strftime("%Y-%m-%d"))
+                    if current.weekday() < 5: # Monday-Friday
+                        dates.append(current.strftime("%Y-%m-%d"))
                     current += timedelta(days=1)
 
-                tasks = [self.fetch_day(session, symbol, d, sem) for d in dates]
+                print(f"📡 Fetching {len(dates)} days for {target_symbol}...")
+                tasks = [self.fetch_day(session, target_symbol, d, sem) for d in dates]
+                
                 operations = []
+                total_synced = 0
                 
                 for f in asyncio.as_completed(tasks):
                     date, daily_data = await f
+                    if not daily_data: continue
+
                     for record in daily_data:
-                        # Final Safety Check: No 0-value records
+                        # THE BOUNCER: Skip empty trades
                         if record["b_qty"] == 0 and record["s_qty"] == 0:
                             continue
 
                         doc = {
-                            "stock": symbol, "date": date, "broker": record["broker"],
-                            "b_qty": record["b_qty"], "s_qty": record["s_qty"],
-                            "b_amt": record["b_amt"], "s_amt": record["s_amt"]
+                            "stock": target_symbol,
+                            "date": date,
+                            "broker": record["broker"],
+                            "b_qty": record["b_qty"],
+                            "s_qty": record["s_qty"],
+                            "b_amt": record["b_amt"],
+                            "s_amt": record["s_amt"]
                         }
+                        
                         operations.append(UpdateOne(
-                            {"stock": symbol, "date": date, "broker": record["broker"]},
-                            {"$set": doc}, upsert=True
+                            {"stock": target_symbol, "date": date, "broker": record["broker"]},
+                            {"$set": doc},
+                            upsert=True
                         ))
 
-                    if len(operations) >= 500:
+                    # Periodic bulk write
+                    if len(operations) >= 1000:
                         res = self.target_collection.bulk_write(operations, ordered=False)
-                        self.stats[symbol] += res.upserted_count + res.modified_count
+                        total_synced += (res.upserted_count + res.modified_count)
                         operations = []
 
+                # Final bulk write
                 if operations:
                     res = self.target_collection.bulk_write(operations, ordered=False)
-                    self.stats[symbol] += res.upserted_count + res.modified_count
+                    total_synced += (res.upserted_count + res.modified_count)
 
             duration = (datetime.now() - start_time).total_seconds()
-            self.send_telegram(f"✅ *Sync Complete*\n📊 SGHC: {self.stats[symbol]} records\n⏱ Time: {duration:.1f}s")
+            self.send_telegram(f"✅ *SGHC Sync Complete*\n📊 Records Saved: {total_synced:,}\n⏱ Time: {duration:.1f}s")
 
         except Exception as e:
-            self.send_telegram(f"❌ *Error*: {str(e)}")
+            self.send_telegram(f"❌ *Fatal Error*: `{str(e)[:100]}`")
+            print(traceback.format_exc())
             raise e
 
 if __name__ == "__main__":
