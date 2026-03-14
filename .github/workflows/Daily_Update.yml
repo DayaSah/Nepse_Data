@@ -1,0 +1,31 @@
+name: Daily Market Update
+
+on:
+  schedule:
+    # 11:15 UTC = 17:00 (5:00 PM) Nepal Time
+    # 0-4 represents Sunday to Thursday
+    - cron: '15 11 * * 0-4'
+  workflow_dispatch: # Allows manual run
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: pip install aiohttp pymongo requests dnspython
+
+      - name: Run Daily Update
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python Utility/Daily_Update.py
