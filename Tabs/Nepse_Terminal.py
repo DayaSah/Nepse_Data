@@ -532,53 +532,57 @@ def run():
                 else:
                     st.info("Not enough price variation to plot Macro Volume Profile.")
 
+        # ------------------------------------------
+        # TAB 7: BROKER INVENTORY RACE
+        # ------------------------------------------
         with tab7:
-                st.markdown("### 🏎️ The Great Broker Accumulation Race")
-                st.markdown("Tracks the cumulative inventory of **every single broker** simultaneously.")
-                st.info("💡 **Pro Tip:** Double-click any broker in the legend to isolate their line, or single-click to turn them off.")
+            st.markdown("### 🏎️ The Great Broker Accumulation Race")
+            st.markdown("Tracks the cumulative inventory of **every single broker** simultaneously.")
+            st.info("💡 **Pro Tip:** Double-click any broker in the legend to isolate their line, or single-click to turn them off.")
+            
+            race_df = fetch_broker_race_data(stock_symbol)
+            
+            if not race_df.empty:
+                # 1. Apply the date mask FIRST
+                mask = (race_df["Date"].dt.date >= start_date) & (race_df["Date"].dt.date <= end_date)
+                race_df = race_df.loc[mask].copy().reset_index(drop=True)
                 
-                race_df = fetch_broker_race_data(stock_symbol)
+                # 2. RECALCULATE the cumulative sum so it strictly starts from 0 for the selected timeframe
+                race_df["Cum_Net_Qty"] = race_df.groupby("Broker")["Net_Qty"].cumsum()
                 
-                if not race_df.empty:
-                    # Safely apply the new start_date and end_date to race_df
-                    mask = (race_df["Date"].dt.date >= start_date) & (race_df["Date"].dt.date <= end_date)
-                    race_df = race_df.loc[mask].copy()
+                # 3. Get the final standing based on the NEW cumulative sums
+                final_standings = race_df.groupby("Broker")["Cum_Net_Qty"].last().sort_values(ascending=False)
+                
+                # Smart Filter Toggle
+                show_top_only = st.checkbox("🎯 Show Top 5 Accumulators & Top 5 Dumpers Only (Remove Noise)", value=True)
+                
+                if show_top_only:
+                    top_brokers = list(final_standings.head(5).index) + list(final_standings.tail(5).index)
+                    plot_df = race_df[race_df["Broker"].isin(top_brokers)]
+                else:
+                    plot_df = race_df
                     
-                    # Get the final standing of each broker to find the top accumulators/dumpers
-                    
-                    # Get the final standing of each broker to find the top accumulators/dumpers
-                    final_standings = race_df.groupby("Broker")["Cum_Net_Qty"].last().sort_values(ascending=False)
-                    
-                    # Smart Filter Toggle
-                    show_top_only = st.checkbox("🎯 Show Top 5 Accumulators & Top 5 Dumpers Only (Remove Noise)", value=True)
-                    
-                    if show_top_only:
-                        top_brokers = list(final_standings.head(5).index) + list(final_standings.tail(5).index)
-                        plot_df = race_df[race_df["Broker"].isin(top_brokers)]
-                    else:
-                        plot_df = race_df
-                        
-                    # Plot the Spaghetti Chart
-                    fig_race = px.line(
-                        plot_df, x="Date", y="Cum_Net_Qty", color="Broker", 
-                        hover_data=["Net_Qty"],
-                        color_discrete_sequence=px.colors.qualitative.Alphabet,
-                        render_mode="webgl"
-                    )
-                    fig_race.update_layout(height=650, hovermode="closest", yaxis_title="Cumulative Net Quantity")
-                    # Make lines slightly transparent to handle the noise, unless hovered
-                    fig_race.update_traces(line=dict(width=2), opacity=0.7)
-                    st.plotly_chart(fig_race, use_container_width=True)
-                    
-                    # Mini Leaderboard below the chart
-                    st.markdown("### 🏆 Current Holdings Leaderboard (End of Selected Period)")
-                    ld1, ld2 = st.columns(2)
-                    with ld1:
-                        st.success("**Top 5 Accumulators (Holding the most)**")
-                        st.dataframe(final_standings.head(5), use_container_width=True)
-                    with ld2:
-                        st.error("**Top 5 Dumpers (Sold the most short/cleared out)**")
-                        st.dataframe(final_standings.tail(5), use_container_width=True)
+                # Plot the Spaghetti Chart
+                fig_race = px.line(
+                    plot_df, x="Date", y="Cum_Net_Qty", color="Broker", 
+                    hover_data=["Net_Qty"],
+                    color_discrete_sequence=px.colors.qualitative.Alphabet,
+                    render_mode="webgl"
+                )
+                fig_race.update_layout(height=650, hovermode="closest", yaxis_title="Cumulative Net Quantity (Selected Period)")
+                # Make lines slightly transparent to handle the noise, unless hovered
+                fig_race.update_traces(line=dict(width=2), opacity=0.7)
+                st.plotly_chart(fig_race, use_container_width=True)
+                
+                # Mini Leaderboard below the chart
+                st.markdown("### 🏆 Current Holdings Leaderboard (Selected Period)")
+                ld1, ld2 = st.columns(2)
+                with ld1:
+                    st.success("**Top 5 Accumulators (Bought the most in this window)**")
+                    st.dataframe(final_standings.head(5), use_container_width=True)
+                with ld2:
+                    st.error("**Top 5 Dumpers (Sold the most in this window)**")
+                    st.dataframe(final_standings.tail(5), use_container_width=True)
 
         # ------------------------------------------
         # TAB 8: AUTOMATED RESULTS & SIGNALS (90-DAY MACRO)
